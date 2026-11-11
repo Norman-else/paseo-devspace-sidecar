@@ -95,7 +95,10 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
   const error = catalog.error ?? snapshot.error ?? document.error;
   const reviewedCount = files.filter((file) => file.hash && reviewed[file.path] === file.hash).length;
   const selected = files.some((file) => file.path === activePath) ? activePath : files[0]?.path ?? "";
+  const prAtTop = pullRequests.data?.status === "available" && !pullRequests.error;
+  const prSection = bound ? <PullRequestStatus key={`${bound.id}:${bound.branch}`} result={pullRequests.data} loading={pullRequests.isPending} refreshing={pullRequests.isFetching} error={pullRequests.error} colors={colors} onRefresh={() => { void pullRequests.refetch(); }} /> : null;
   return <View style={{ flex: 1, minHeight: 0, backgroundColor: colors.surface0 }} testID="devspace-diff-panel">
+    {prAtTop ? prSection : null}
     <View style={{ paddingHorizontal: 12, paddingVertical: 8, gap: 8, borderBottomWidth: 1, borderColor: colors.border }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <Icon name={bound ? "GitBranch" : "FileDiff"} size={14} color={colors.foregroundMuted} />
@@ -119,7 +122,7 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
       </View> : null}
       {searchOpen ? <TextInput value={search} onChangeText={setSearch} autoFocus placeholder={t("filterPlaceholder")} accessibilityLabel={t("filterFiles")} style={{ color: colors.foreground, borderWidth: 1, borderColor: colors.border, borderRadius: 4, padding: 7, fontSize: 12 }} /> : null}
     </View>
-    {bound ? <PullRequestStatus key={`${bound.id}:${bound.branch}`} result={pullRequests.data} loading={pullRequests.isPending} error={pullRequests.error} colors={colors} /> : null}
+    {!prAtTop ? prSection : null}
     {error ? <Text selectable style={{ color: colors.statusDanger, padding: 12, fontSize: 12 }}>{translateBackend(error.message)}</Text> : null}
     {catalog.isPending || (bound && !document.data && (snapshot.isPending || document.isPending)) ? <ActivityIndicator color={colors.foregroundMuted} style={{ margin: 24 }} /> : null}
     {!catalog.isPending && !bound ? <View style={{ padding: 20, gap: 8 }}><Text style={{ color: colors.foreground, fontSize: 13 }}>{t("noAssociation")}</Text><Text style={{ color: colors.foregroundMuted, fontSize: 12, lineHeight: 20 }}>{catalog.data?.inferenceError ? translateBackend(catalog.data.inferenceError) : t("noAssociationHelp")}</Text></View> : null}

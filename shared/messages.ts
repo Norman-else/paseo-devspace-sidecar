@@ -21,6 +21,9 @@ export const en = {
   prChecksPassed_one: "{{count}} check passed", prChecksPassed_other: "{{count}} checks passed", prChecksFailed_one: "{{count}} check failed", prChecksFailed_other: "{{count}} checks failed", prChecksPending_one: "{{count}} check pending", prChecksPending_other: "{{count}} checks pending", prNoChecks: "No checks", prChecksSkipped: "Checks skipped", prChecksUnknown: "Checks unknown",
   prApproved: "Approved", prChangesRequested: "Changes requested", prReviewRequired: "Review required", prConflicts: "Merge conflicts", prToggleChecks: "Show or hide PR checks",
   prLastPush: "Checks apply to the last push", prHeadDiffers: "PR head differs from this checkout",
+  prSection: "Pull request", prRefresh: "Refresh PR status", prOpenOnGitHub: "Open on GitHub", prSelect: "Select PR #{{number}}",
+  prSkippedCount_one: "{{count}} skipped", prSkippedCount_other: "{{count}} skipped",
+  prCheckPassed: "Passed", prCheckFailed: "Failed", prCheckPending: "Pending", prCheckSkipped: "Skipped", prCheckUnknown: "Unknown",
 } as const;
 
 export const zh: Record<keyof typeof en, string> = {
@@ -46,6 +49,9 @@ export const zh: Record<keyof typeof en, string> = {
   prChecksPassed_one: "{{count}} 项检查通过", prChecksPassed_other: "{{count}} 项检查通过", prChecksFailed_one: "{{count}} 项检查失败", prChecksFailed_other: "{{count}} 项检查失败", prChecksPending_one: "{{count}} 项检查进行中", prChecksPending_other: "{{count}} 项检查进行中", prNoChecks: "暂无检查", prChecksSkipped: "检查已跳过", prChecksUnknown: "检查状态未知",
   prApproved: "已批准", prChangesRequested: "需要修改", prReviewRequired: "等待 review", prConflicts: "存在合并冲突", prToggleChecks: "展开或收起 PR 检查详情",
   prLastPush: "检查对应最后一次推送", prHeadDiffers: "PR 提交与当前工作区不同",
+  prSection: "合并请求", prRefresh: "刷新 PR 状态", prOpenOnGitHub: "在 GitHub 打开", prSelect: "选择 PR #{{number}}",
+  prSkippedCount_one: "{{count}} 项跳过", prSkippedCount_other: "{{count}} 项跳过",
+  prCheckPassed: "通过", prCheckFailed: "失败", prCheckPending: "进行中", prCheckSkipped: "已跳过", prCheckUnknown: "未知",
 };
 
 export const backendMessages = {
