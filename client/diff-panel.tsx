@@ -138,11 +138,11 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
         {wide ? <>
           <ResizeDivider width={indexWidth} min={140} max={maxIndexWidth} colors={colors} onResize={setDragWidth}
             onCommit={(width) => { save({ ...latestState.current, indexWidth: width }); setDragWidth(null); }} />
-          <View style={{ width: indexWidth, flexShrink: 0 }}><FileIndex files={files} activePath={selected} reviewed={reviewed} colors={colors} onJump={navigate} /></View>
+          <View style={{ width: indexWidth, flexShrink: 0 }}><FileIndex files={files} activePath={selected} reviewed={reviewed} colors={colors} fontSize={typography.uiFontSize} onJump={navigate} /></View>
         </>
           : indexOpen ? <View style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0, backgroundColor: colors.surface0 }}>
             <View style={{ paddingHorizontal: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between", height: 36, borderBottomWidth: 1, borderColor: colors.border }}><Text style={{ color: colors.foreground, fontSize: 12 }}>{t("changedFiles")}</Text><ToolButton icon="X" label={t("closeIndex")} colors={colors} onPress={() => setIndexOpen(false)} /></View>
-            <FileIndex files={files} activePath={selected} reviewed={reviewed} colors={colors} onJump={navigate} />
+            <FileIndex files={files} activePath={selected} reviewed={reviewed} colors={colors} fontSize={typography.uiFontSize} onJump={navigate} />
           </View> : null}
       </> : null}
     </View>

@@ -24,7 +24,7 @@ export function watchCodeAppearance(fallback: string, changed: (value: CodeAppea
   let previous = readCodeAppearance(fallback);
   const refresh = () => {
     const next = readCodeAppearance(fallback);
-    if (next.fontFamily === previous.fontFamily && next.fontSize === previous.fontSize) return;
+    if (next.fontFamily === previous.fontFamily && next.fontSize === previous.fontSize && next.uiFontSize === previous.uiFontSize) return;
     previous = next; changed(next);
   };
   window.addEventListener("storage", refresh);
