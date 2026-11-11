@@ -1,5 +1,5 @@
 export const DEFAULT_MONO_FONT = "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
-export type CodeAppearance = { fontFamily: string; fontSize: number; uiFontSize: number; lineHeight: number; characterWidth: number; gutterFontSize: number; gutterCellWidth: number; markerWidth: number; gutterWidth: number };
+export type CodeAppearance = { fontFamily: string; fontSize: number; lineHeight: number; characterWidth: number; gutterFontSize: number; gutterCellWidth: number; markerWidth: number; gutterWidth: number };
 
 /** Follow saved Paseo code preferences, keeping this review at a readable 14px minimum. */
 export function codeAppearance(value: unknown, fallback = DEFAULT_MONO_FONT): CodeAppearance {
@@ -8,12 +8,10 @@ export function codeAppearance(value: unknown, fallback = DEFAULT_MONO_FONT): Co
   const safeFamily = family.length <= 200 && !/[\x00-\x1f\x7f]/.test(family) && /^[\p{L}\p{N}\s,_.'"-]+$/u.test(family) && (family.match(/'/g)?.length ?? 0) % 2 === 0 && (family.match(/"/g)?.length ?? 0) % 2 === 0;
   const requested = typeof settings.codeFontSize === "number" || typeof settings.codeFontSize === "string" ? Number(settings.codeFontSize) : NaN;
   const fontSize = Number.isFinite(requested) ? Math.max(14, Math.min(22, Math.floor(requested))) : 14;
-  const requestedUi = typeof settings.uiBaseFontSize === "number" || typeof settings.uiBaseFontSize === "string" ? Number(settings.uiBaseFontSize) : NaN;
-  const uiFontSize = Number.isFinite(requestedUi) ? Math.max(14, Math.min(21, Math.floor(requestedUi))) : 14;
   const gutterFontSize = Math.max(11, fontSize - 2);
   const gutterCellWidth = Math.max(32, Math.ceil(gutterFontSize * 0.62 * 4) + 6);
   const markerWidth = Math.ceil(fontSize * 0.62) + 6;
-  return { fontFamily: safeFamily && family ? family : fallback, fontSize, uiFontSize, lineHeight: Math.round(fontSize * 1.5), characterWidth: fontSize * 0.62,
+  return { fontFamily: safeFamily && family ? family : fallback, fontSize, lineHeight: Math.round(fontSize * 1.5), characterWidth: fontSize * 0.62,
     gutterFontSize, gutterCellWidth, markerWidth, gutterWidth: 3 + gutterCellWidth * 2 + markerWidth };
 }
 

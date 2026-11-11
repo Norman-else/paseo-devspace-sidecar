@@ -9,6 +9,7 @@ import { diffBackground, type CodeAppearance } from "../shared/appearance";
 import { codeScopeProps } from "./web";
 
 export type Colors = PluginAgentPanelProps["theme"]["colors"];
+const fileNameTypography = { fontSize: 12, lineHeight: 18, fontWeight: "500" as const };
 export function ToolButton({ icon, label, colors, onPress, active = false }: { icon: string; label: string; colors: Colors; onPress(): void; active?: boolean }) {
   const [hover, setHover] = useState(false);
   return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)}
@@ -16,8 +17,9 @@ export function ToolButton({ icon, label, colors, onPress, active = false }: { i
     <Icon name={icon} size={14} color={active ? colors.foreground : colors.foregroundMuted} />
   </Pressable>;
 }
-export function Stats({ file, colors, fontSize = 10 }: { file: ReviewFile; colors: Colors; fontSize?: number }) {
+export function Stats({ file, colors }: { file: ReviewFile; colors: Colors }) {
   const { t } = useMessages();
+  const fontSize = 10;
   return <View style={{ flexDirection: "row", gap: 5 }}>
     {!!file.additions && <Text style={{ color: colors.statusSuccess, fontSize }}>+{file.additions}</Text>}
     {!!file.deletions && <Text style={{ color: colors.statusDanger, fontSize }}>−{file.deletions}</Text>}
@@ -34,7 +36,7 @@ export function FileHeader({ file, width, colors, collapsed, reviewed, onToggle,
       style={{ flex: 1, minWidth: 0, height: 34, flexDirection: "row", gap: 6, alignItems: "center", paddingLeft: 8, paddingRight: 8 }}>
       <Icon name={collapsed ? "ChevronRight" : "ChevronDown"} size={12} color={colors.foregroundMuted} />
       <Icon name="FileCode" size={13} color={colors.foregroundMuted} />
-      <Text numberOfLines={1} ellipsizeMode="middle" style={{ color: reviewed ? colors.foregroundMuted : colors.foreground, fontSize: 12, fontWeight: "500", flexShrink: 1 }}>{name}</Text>
+      <Text numberOfLines={1} ellipsizeMode="middle" style={[fileNameTypography, { color: reviewed ? colors.foregroundMuted : colors.foreground, flexShrink: 1 }]}>{name}</Text>
       <Text numberOfLines={1} ellipsizeMode="middle" style={{ color: colors.foregroundMuted, fontSize: 10, flex: 1, minWidth: 0 }}>{parts.join("/")}</Text>
     </Pressable>
     <Stats file={file} colors={colors} />
@@ -44,16 +46,16 @@ export function FileHeader({ file, width, colors, collapsed, reviewed, onToggle,
     </Pressable>
   </View>;
 }
-export function FileIndex({ files, activePath, reviewed, colors, fontSize, onJump }: { files: ReviewFile[]; activePath: string; reviewed: Record<string, string>; colors: Colors; fontSize: number; onJump(path: string): void }) {
+export function FileIndex({ files, activePath, reviewed, colors, onJump }: { files: ReviewFile[]; activePath: string; reviewed: Record<string, string>; colors: Colors; onJump(path: string): void }) {
   const { t } = useMessages();
   const [hover, setHover] = useState<string | null>(null);
   return <FlatList<ReviewFile> data={files} keyExtractor={(f) => f.path} style={{ flex: 1 }} initialNumToRender={50}
     renderItem={({ item: file }) => <Pressable accessibilityRole="button" accessibilityLabel={t("jumpFile", { path: file.path })} accessibilityState={{ selected: activePath === file.path }}
       onPress={() => onJump(file.path)} onHoverIn={() => setHover(file.path)} onHoverOut={() => setHover(null)}
-      style={({ pressed }) => ({ minHeight: Math.max(34, Math.ceil(fontSize * 1.5) + 12), flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 8, backgroundColor: pressed || hover === file.path || activePath === file.path ? colors.surface2 : colors.surface0 })}>
-      <Icon name={file.hash && reviewed[file.path] === file.hash ? "CircleCheck" : "FileCode"} size={Math.max(14, fontSize)} color={file.hash && reviewed[file.path] === file.hash ? colors.statusSuccess : colors.foregroundMuted} />
-      <Text numberOfLines={1} ellipsizeMode="middle" style={{ flex: 1, minWidth: 0, color: file.status === "A" || file.status === "?" ? colors.statusSuccess : colors.foreground, fontSize, lineHeight: Math.ceil(fontSize * 1.5) }}>{file.path.split("/").at(-1)}</Text>
-      <Stats file={file} colors={colors} fontSize={Math.max(12, fontSize - 2)} />
+      style={({ pressed }) => ({ minHeight: 32, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 8, backgroundColor: pressed || hover === file.path || activePath === file.path ? colors.surface2 : colors.surface0 })}>
+      <Icon name={file.hash && reviewed[file.path] === file.hash ? "CircleCheck" : "FileCode"} size={13} color={file.hash && reviewed[file.path] === file.hash ? colors.statusSuccess : colors.foregroundMuted} />
+      <Text numberOfLines={1} ellipsizeMode="middle" style={[fileNameTypography, { flex: 1, minWidth: 0, color: file.status === "A" || file.status === "?" ? colors.statusSuccess : colors.foreground }]}>{file.path.split("/").at(-1)}</Text>
+      <Stats file={file} colors={colors} />
     </Pressable>}
   />;
 }
