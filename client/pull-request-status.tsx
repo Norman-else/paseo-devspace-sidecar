@@ -44,6 +44,10 @@ function PullRequestCard({ pr, result, refreshing, colors, onRefresh }: { pr: Pu
   const checkTone = checks.status === "failed" ? colors.statusDanger : checks.status === "passed" ? colors.statusSuccess : checks.status === "pending" ? colors.statusWarning : colors.foregroundMuted;
   const checksLabel = checks.status === "passed" ? t("prChecksPassed", { count: checks.passed }) : checks.status === "failed" ? t("prChecksFailed", { count: checks.failed }) : checks.status === "pending" ? t("prChecksPending", { count: checks.pending }) : t(checks.status === "none" ? "prNoChecks" : checks.status === "skipped" ? "prChecksSkipped" : "prChecksUnknown");
   return <>
+    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+      <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, color: colors.foregroundMuted, fontSize: 11, lineHeight: 16 }}>{result.repository}</Text>
+      <ExternalLink href={pr.url}><Text style={{ color: colors.accent, fontSize: 11, lineHeight: 16 }}>{t("prOpenOnGitHub")}</Text></ExternalLink>
+    </View>
     <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
       <Icon name={pr.state === "MERGED" ? "GitMerge" : "GitPullRequest"} size={18} color={tone} />
       <Text style={{ color: colors.foregroundMuted, fontSize: 11 }}>{t("prSection")}</Text>
@@ -56,6 +60,11 @@ function PullRequestCard({ pr, result, refreshing, colors, onRefresh }: { pr: Pu
     <ExternalLink href={pr.url} accessibilityLabel={t("prOpenLink", { number: pr.number })}>
       <Text numberOfLines={2} style={{ color: colors.foreground, fontSize: 13, fontWeight: "500", lineHeight: 19 }}>{pr.title}</Text>
     </ExternalLink>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+      <Icon name="GitBranch" size={12} color={colors.foregroundMuted} />
+      <Text selectable numberOfLines={1} accessibilityLabel={t("prBranchDirection", { source: result.branch, target: pr.baseBranch })}
+        style={{ flex: 1, minWidth: 0, color: colors.foreground, fontSize: 11, lineHeight: 16 }}>{result.branch} → {pr.baseBranch}</Text>
+    </View>
     <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
       <StatusBadge label={checksLabel} icon={checks.status === "passed" ? "CircleCheck" : checks.status === "failed" ? "CircleX" : "CircleDot"}
         tone={checkTone} colors={colors} expanded={expanded} onPress={checks.total ? () => setExpanded(!expanded) : undefined} accessibilityLabel={t("prToggleChecks")} />
@@ -65,17 +74,6 @@ function PullRequestCard({ pr, result, refreshing, colors, onRefresh }: { pr: Pu
         icon={pr.review === "APPROVED" ? "CheckCheck" : "MessageSquare"}
         tone={pr.review === "APPROVED" ? colors.statusSuccess : pr.review === "CHANGES_REQUESTED" ? colors.statusDanger : colors.statusWarning} colors={colors} /> : null}
       {pr.conflicts && pr.state === "OPEN" ? <StatusBadge label={t("prConflicts")} icon="CircleAlert" tone={colors.statusDanger} colors={colors} /> : null}
-    </View>
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "space-between", flexWrap: "wrap" }}>
-      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-        <Text numberOfLines={1} style={{ color: colors.foregroundMuted, fontSize: 10, lineHeight: 16 }}>{result.repository}</Text>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-          <Icon name="GitBranch" size={12} color={colors.foregroundMuted} />
-          <Text selectable numberOfLines={1} accessibilityLabel={t("prBranchDirection", { source: result.branch, target: pr.baseBranch })}
-            style={{ flex: 1, minWidth: 0, color: colors.foreground, fontSize: 11, lineHeight: 16 }}>{result.branch} → {pr.baseBranch}</Text>
-        </View>
-      </View>
-      <ExternalLink href={pr.url}><Text style={{ color: colors.accent, fontSize: 11, lineHeight: 16 }}>{t("prOpenOnGitHub")} ↗</Text></ExternalLink>
     </View>
     {expanded && checks.entries.length ? <View style={{ gap: 8, paddingTop: 10, borderTopWidth: 1, borderColor: colors.border }}>
       <Text style={{ color: colors.foregroundMuted, fontSize: 10, lineHeight: 15 }}>{t("prLastPush")}{result.localHeadSha !== pr.headSha ? ` · ${t("prHeadDiffers")}` : ""}</Text>
