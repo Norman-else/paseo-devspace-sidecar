@@ -7,8 +7,8 @@ import type { Colors } from "./review-ui";
 import { useMessages } from "./messages";
 
 type Available = Extract<PullRequestResult, { status: "available" }>;
-export function PullRequestStatus({ result, loading, error, colors }: {
-  result?: PullRequestResult; loading: boolean; error: Error | null; colors: Colors;
+export function PullRequestStatus({ result, loading, error, colors, compact = false }: {
+  result?: PullRequestResult; loading: boolean; error: Error | null; colors: Colors; compact?: boolean;
 }) {
   const { t } = useMessages();
   const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
@@ -30,11 +30,11 @@ export function PullRequestStatus({ result, loading, error, colors }: {
         <Text style={{ fontSize: 11, color: active.number === pr.number ? colors.foreground : colors.foregroundMuted }}>#{pr.number} → {pr.baseBranch}</Text>
       </Pressable>)}
     </ScrollView> : null}
-    <PullRequestSummary key={active.number} pr={active} result={result} colors={colors} />
+    <PullRequestSummary key={active.number} pr={active} result={result} colors={colors} compact={compact} />
   </View>;
 }
 
-function PullRequestSummary({ pr, result, colors }: { pr: PullRequest; result: Available; colors: Colors }) {
+function PullRequestSummary({ pr, result, colors, compact }: { pr: PullRequest; result: Available; colors: Colors; compact: boolean }) {
   const { t } = useMessages();
   const [expanded, setExpanded] = useState(false);
   const stateKey = { OPEN: "prOpen", DRAFT: "prDraft", MERGED: "prMerged", CLOSED: "prClosed" } as const;
@@ -45,18 +45,20 @@ function PullRequestSummary({ pr, result, colors }: { pr: PullRequest; result: A
   return <>
     <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
       <View style={{ flex: 1, minWidth: 0, minHeight: 24, flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: 16, rowGap: 4 }}>
-        <View style={{ flexShrink: 1, minWidth: 0, maxWidth: "100%", flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <View style={{ flexGrow: compact ? 1 : 0, flexBasis: compact ? 0 : "auto", flexShrink: 1, minWidth: 0, maxWidth: "100%", flexDirection: "row", alignItems: "center", gap: 8 }}>
           <View style={{ flexShrink: 0 }}><ExternalLink href={pr.url} accessibilityLabel={t("prOpenLink", { number: pr.number })}>
             <Text style={{ color: colors.foreground, fontSize: 13, lineHeight: 20, fontWeight: "600" }}>PR #{pr.number}</Text>
           </ExternalLink></View>
           <Text style={{ color: colors.foregroundMuted, fontSize: 13, lineHeight: 20 }}>·</Text>
           <Text numberOfLines={1} ellipsizeMode="middle" style={{ flexShrink: 1, minWidth: 0, color: colors.foregroundMuted, fontSize: 13, lineHeight: 20 }}>{result.repository}</Text>
         </View>
-        <Text selectable numberOfLines={1} ellipsizeMode="middle" accessibilityLabel={t("prBranchDirection", { source: result.branch, target: pr.baseBranch })}
-          style={{ flexGrow: 1, flexShrink: 1, flexBasis: 170, minWidth: 0, textAlign: "right", color: colors.foregroundMuted, fontSize: 13, lineHeight: 20 }}>{result.branch} → {pr.baseBranch}</Text>
+        {!compact ? <Text selectable numberOfLines={1} ellipsizeMode="middle" accessibilityLabel={t("prBranchDirection", { source: result.branch, target: pr.baseBranch })}
+          style={{ flexGrow: 1, flexShrink: 1, flexBasis: 170, minWidth: 0, textAlign: "right", color: colors.foregroundMuted, fontSize: 13, lineHeight: 20 }}>{result.branch} → {pr.baseBranch}</Text> : null}
       </View>
       <StatusBadge label={t(stateKey[pr.state])} tone={tone} colors={colors} filled />
     </View>
+    {compact ? <Text selectable accessibilityLabel={t("prBranchDirection", { source: result.branch, target: pr.baseBranch })}
+      style={{ color: colors.foregroundMuted, fontSize: 12, lineHeight: 18 }}>{result.branch} → {pr.baseBranch}</Text> : null}
     <Text numberOfLines={2} style={{ color: colors.foreground, fontSize: 13, fontWeight: "500", lineHeight: 19 }}>{pr.title}</Text>
     <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
       <StatusBadge label={checksLabel} icon={checks.status === "passed" ? "CircleCheck" : checks.status === "failed" ? "CircleX" : "CircleDot"}

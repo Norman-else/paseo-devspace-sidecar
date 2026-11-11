@@ -99,23 +99,25 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
   const selected = files.some((file) => file.path === activePath) ? activePath : files[0]?.path ?? "";
   const header = reviewHeader({ hasWorkspace: !!bound, result: pullRequests.data, pending: pullRequests.isPending, error: !!pullRequests.error });
   const hasPr = header.mode === "pull-request";
+  const collapseAction = <ToolButton icon="ListCollapse" label={t(collapsed.size ? "expandAll" : "collapseAll")} colors={colors} touch={!wide} onPress={() => mutate({ collapsed: collapsed.size ? [] : files.map((f) => f.path) })} />;
+  const refreshAction = <ToolButton icon="RefreshCw" label={t("refresh")} colors={colors} touch={!wide} onPress={refresh} />;
   const actions = <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
     {bound ? <>
-      <ToolButton icon="Search" label={t("filterFiles")} colors={colors} onPress={() => { setSearchOpen(!searchOpen); setSearch(""); }} active={searchOpen} />
-      <ToolButton icon="ListCollapse" label={t(collapsed.size ? "expandAll" : "collapseAll")} colors={colors} onPress={() => mutate({ collapsed: collapsed.size ? [] : files.map((f) => f.path) })} />
-      {!wide ? <ToolButton icon="List" label={t("openIndex")} colors={colors} active={indexOpen} onPress={() => setIndexOpen(!indexOpen)} /> : null}
+      <ToolButton icon="Search" label={t("filterFiles")} colors={colors} touch={!wide} onPress={() => { setSearchOpen(!searchOpen); setSearch(""); }} active={searchOpen} />
+      {wide ? collapseAction : <ToolButton icon="List" label={t("openIndex")} colors={colors} touch active={indexOpen} onPress={() => setIndexOpen(!indexOpen)} />}
     </> : null}
-    <ToolButton icon="RefreshCw" label={t("refresh")} colors={colors} onPress={refresh} />
+    {wide || !bound ? refreshAction : null}
   </View>;
   return <View style={{ flex: 1, minHeight: 0, backgroundColor: colors.surface0 }} testID="devspace-diff-panel">
-    {hasPr ? <PullRequestStatus key={`${bound!.id}:${bound!.branch}`} result={pullRequests.data} loading={false} error={null} colors={colors} />
+    {hasPr ? <PullRequestStatus key={`${bound!.id}:${bound!.branch}`} result={pullRequests.data} loading={false} error={null} colors={colors} compact={!wide} />
       : <View style={{ paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 8 }}>
         <Icon name={bound ? "GitBranch" : "FileDiff"} size={14} color={colors.foregroundMuted} />
         <Text style={{ color: colors.foreground, fontSize: 12, fontWeight: "600", flex: 1 }} numberOfLines={1}>{bound?.branch ?? t("codeReview")}</Text>
         {!bound ? actions : null}
       </View>}
-    {header.showPrNotice ? <PullRequestStatus result={pullRequests.data} loading={pullRequests.isPending} error={pullRequests.error} colors={colors} /> : null}
+    {header.showPrNotice ? <PullRequestStatus result={pullRequests.data} loading={pullRequests.isPending} error={pullRequests.error} colors={colors} compact={!wide} /> : null}
     {bound ? <ReviewToolbar mode={state.comparison} fileCount={snapshot.data?.totalFiles} reviewedCount={reviewedCount} totals={totals}
+      compact={!wide} secondaryActions={!wide ? <View style={{ flexDirection: "row", gap: 4 }}>{collapseAction}{refreshAction}</View> : undefined}
       searchOpen={searchOpen} search={search} colors={colors} onSearchChange={setSearch}
       onModeChange={(comparison) => save({ ...state, comparison, scope: "", collapsed: [], reviewed: {} })}>{actions}</ReviewToolbar> : null}
     {error ? <Text selectable style={{ color: colors.statusDanger, padding: 12, fontSize: 12 }}>{translateBackend(error.message)}</Text> : null}
