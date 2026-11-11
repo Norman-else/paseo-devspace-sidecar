@@ -5,15 +5,17 @@ import { useRpc, useTabState, type PluginAgentPanelProps } from "@getpaseo/plugi
 import { FlatList, Icon, TextInput } from "@getpaseo/plugin/client/ui";
 import { z } from "zod";
 import { catalogRpc, comparison, fileRpc, reviewRpc, snapshotRpc, type ReviewFile } from "../shared/diff";
-import { CODE_GUTTER_WIDTH, reviewRows, type ReviewRow } from "../shared/review";
+import { reviewRows, type ReviewRow } from "../shared/review";
 import { CodeLine, FileHeader, FileIndex, ToolButton } from "./review-ui";
 import { DIVIDER_WIDTH, ResizeDivider } from "./resize-divider";
 import { useRowMeasurements } from "./use-row-measurements";
 import { useMessages } from "./messages";
+import { useCodeAppearance } from "./use-code-appearance";
 
 const stateSchema = z.object({ comparison, scope: z.string().default(""), collapsed: z.array(z.string()).default([]), reviewed: z.record(z.string(), z.string()).default({}), indexWidth: z.number().min(140).max(520).nullable().default(null) });
 export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
   const { t, translateBackend } = useMessages();
+  const typography = useCodeAppearance();
   const [state, save] = useTabState(tab, stateSchema, { comparison: "task" as const, scope: "", collapsed: [] as string[], reviewed: {} as Record<string, string>, indexWidth: null as number | null });
   const latestState = useRef(state);
   latestState.current = state;
@@ -48,9 +50,10 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
   const maxIndexWidth = Math.min(520, Math.max(140, size.width - 280 - DIVIDER_WIDTH));
   const indexWidth = wide ? Math.max(140, Math.min(maxIndexWidth, dragWidth ?? state.indexWidth ?? Math.min(210, Math.max(150, size.width * 0.26)))) : 0;
   const viewportWidth = Math.max(100, size.width - indexWidth - (wide ? DIVIDER_WIDTH : 0));
-  const textWidth = Math.max(1, viewportWidth - CODE_GUTTER_WIDTH - 8);
-  const { heights, report } = useRowMeasurements(viewportWidth);
-  const model = useMemo(() => reviewRows(files, collapsed, textWidth, heights), [files, collapsed, textWidth, heights]);
+  const textWidth = Math.max(1, viewportWidth - typography.gutterWidth - 8);
+  const layoutKey = `${viewportWidth}:${typography.fontFamily}:${typography.fontSize}`;
+  const { heights, report } = useRowMeasurements(layoutKey);
+  const model = useMemo(() => reviewRows(files, collapsed, textWidth, heights, typography), [files, collapsed, textWidth, heights, typography]);
   const list = useRef<NativeFlatList<ReviewRow>>(null);
   const viewability = useRef({ itemVisiblePercentThreshold: 10 });
   const onViewable = useRef(({ viewableItems }: { viewableItems: ViewToken<ReviewRow>[] }) => { if (viewableItems[0]?.item) setActivePath(viewableItems[0].item.path); });
@@ -121,7 +124,7 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
               onViewableItemsChanged={onViewable.current} viewabilityConfig={viewability.current}
               ListEmptyComponent={<Text style={{ color: colors.foregroundMuted, padding: 20, fontSize: 12 }}>{t(search ? "noMatches" : "noChanges")}</Text>}
               renderItem={({ item: row }) => row.kind === "header" ? <FileHeader file={row.file} width={viewportWidth} colors={colors} collapsed={collapsed.has(row.path)} reviewed={!!row.file.hash && reviewed[row.path] === row.file.hash} onToggle={() => toggle(row.path)} onReview={() => mark(row.file)} />
-                : row.kind === "code" ? <CodeLine row={row} colors={colors} onHeight={(height) => report(row.key, height, viewportWidth)} />
+                : row.kind === "code" ? <CodeLine row={row} colors={colors} typography={typography} onHeight={(height) => report(row.key, height, layoutKey)} />
                 : row.kind === "gap" ? <View style={{ width: viewportWidth, height: row.height, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, gap: 8, backgroundColor: colors.surface0 }}>
                   <Icon name="ChevronsUpDown" size={11} color={colors.foregroundMuted} />
                   <Text style={{ fontSize: 10, color: colors.foregroundMuted }}>{row.omitted ? t("unchangedLines", { count: row.omitted }) : t("context")}</Text>

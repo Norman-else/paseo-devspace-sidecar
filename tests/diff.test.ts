@@ -16,6 +16,7 @@ import { diffLines, suggestedWorkspace, type Workspace } from "../shared/diff.ts
 import { reviewRows } from "../shared/review.ts";
 import { codeTokens } from "../shared/syntax.ts";
 import { en, zh } from "../shared/messages.ts";
+import { codeAppearance, DEFAULT_MONO_FONT, diffBackground } from "../shared/appearance.ts";
 import { RemoteSources } from "../server/remote-sources.ts";
 
 const exec = promisify(execFile);
@@ -50,7 +51,7 @@ test("reads staged, unstaged, deleted, renamed, untracked and binary files witho
     await unlink(join(f.root, "delete.txt"));
     await rename(join(f.root, "rename.txt"), join(f.root, "renamed.txt"));
     await f.git("add", "rename.txt", "renamed.txt");
-    const odd = "new\tfile\nwith space.txt";
+    const odd = process.platform === "win32" ? "new 中文 file with space.txt" : "new\tfile\nwith space.txt";
     await writeFile(join(f.root, odd), "new line\n");
     await writeFile(join(f.root, "binary.bin"), Buffer.from([0, 3, 4]));
     const indexBefore = createHash("sha256").update(await readFile(join(f.root, ".git", "index"))).digest("hex");
@@ -259,4 +260,27 @@ test("Paseo's locale runtime updates labels, plural counts and persistent messag
     for (const notify of listeners) notify();
     assert.equal(runtime.resolve(persistentLabel), "Open DevSpace Diff");
   } finally { runtime.dispose(); }
+});
+
+test("code typography follows the saved font and larger size, and layout changes with it", () => {
+  const saved = codeAppearance({ monoFontFamily: "'JetBrains Mono', monospace", codeFontSize: 18 });
+  assert.equal(saved.fontFamily, "'JetBrains Mono', monospace");
+  assert.equal(saved.fontSize, 18); assert.equal(saved.lineHeight, 27);
+  assert.equal(codeAppearance({ codeFontSize: 12 }).fontSize, 14);
+  assert.equal(codeAppearance({ codeFontSize: 50 }).fontSize, 22);
+  assert.equal(codeAppearance({ monoFontFamily: "bad; family", codeFontSize: "invalid" }).fontFamily, DEFAULT_MONO_FONT);
+  assert.equal(codeAppearance({ monoFontFamily: "bad\nfamily" }).fontFamily, DEFAULT_MONO_FONT);
+  const file = { path: "Long.java", status: "A", additions: 1, deletions: 0, binary: false, hash: "font", patch: "@@ -0,0 +1 @@\n+" + "identifier".repeat(20) + "\n" };
+  const normal = reviewRows([file], new Set(), 300, undefined, codeAppearance(null));
+  const larger = reviewRows([file], new Set(), 300, undefined, saved);
+  assert.ok(larger.height > normal.height);
+});
+
+test("diff backgrounds are opaque and distinct across added/deleted lines and host themes", () => {
+  const added = diffBackground("#6cb17b", "#1f1e1e"), removed = diffBackground("#d8847b", "#1f1e1e");
+  assert.match(added, /^#[0-9a-f]{6}$/); assert.notEqual(added, removed); assert.notEqual(added, "#1f1e1e");
+  assert.equal(diffBackground("rgb(108,177,123)", "rgb(31,30,30)"), added);
+  const addedLight = diffBackground("#3e704a", "#ffffff");
+  assert.notEqual(addedLight, "#ffffff"); assert.notEqual(addedLight, added);
+  assert.equal(diffBackground("unknown", "#222222"), "#222222");
 });

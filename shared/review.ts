@@ -1,16 +1,15 @@
 import { diffLines, type DiffLine, type ReviewFile } from "./diff";
 import { codeTokens, type CodeToken } from "./syntax";
+import { codeAppearance, type CodeAppearance } from "./appearance";
 
-export const LINE_HEIGHT = 20;
 export const HEADER_HEIGHT = 36;
-export const CODE_GUTTER_WIDTH = 83;
 export type ReviewRow =
   | { kind: "header"; file: ReviewFile; path: string; key: string; height: number }
   | { kind: "code"; line: DiffLine; tokens: CodeToken[]; path: string; key: string; height: number }
   | { kind: "gap"; omitted: number; label: string; path: string; key: string; height: number }
   | { kind: "notice"; text: string; deferred: boolean; path: string; key: string; height: number };
 
-export function reviewRows(files: ReviewFile[], collapsed: ReadonlySet<string>, wrapWidth?: number, measured?: ReadonlyMap<string, number>) {
+export function reviewRows(files: ReviewFile[], collapsed: ReadonlySet<string>, wrapWidth?: number, measured?: ReadonlyMap<string, number>, typography: CodeAppearance = codeAppearance(null)) {
   const rows: ReviewRow[] = [], offsets: number[] = [], headers: number[] = [];
   const fileIndices = new Map<string, number>();
   let offset = 0;
@@ -40,10 +39,10 @@ export function reviewRows(files: ReviewFile[], collapsed: ReadonlySet<string>, 
         if (line.old !== undefined) oldEnd = line.old;
         if (line.next !== undefined) newEnd = line.next;
         // Unseen rows use a conservative estimate; onLayout replaces it with the real height.
-        const columns = wrapWidth === undefined ? Infinity : Math.max(1, Math.floor(wrapWidth / 7.3));
+        const columns = wrapWidth === undefined ? Infinity : Math.max(1, Math.floor(wrapWidth / typography.characterWidth));
         const cells = [...source].reduce((count, char) => count + (/[^\u0000-\u00ff]/.test(char) ? 2 : 1), 0);
         const wrappedLines = Math.max(1, Math.ceil(cells / columns));
-        add({ kind: "code", line, tokens, path: file.path, key, height: LINE_HEIGHT * wrappedLines });
+        add({ kind: "code", line, tokens, path: file.path, key, height: typography.lineHeight * wrappedLines });
       } else if (line.text.startsWith("\\")) add({ kind: "notice", path: file.path, text: "No newline at end of file.", deferred: false, key, height: 24 });
     }
   }

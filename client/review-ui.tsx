@@ -5,9 +5,10 @@ import type { PluginAgentPanelProps } from "@getpaseo/plugin/client";
 import type { ReviewFile } from "../shared/diff";
 import type { ReviewRow } from "../shared/review";
 import { useMessages } from "./messages";
+import { diffBackground, type CodeAppearance } from "../shared/appearance";
+import { codeScopeProps } from "./web";
 
 export type Colors = PluginAgentPanelProps["theme"]["colors"];
-const mono = Platform.OS === "ios" ? "Menlo" : Platform.OS === "android" ? "monospace" : "ui-monospace, SFMono-Regular, Menlo, monospace";
 export function ToolButton({ icon, label, colors, onPress, active = false }: { icon: string; label: string; colors: Colors; onPress(): void; active?: boolean }) {
   const [hover, setHover] = useState(false);
   return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)}
@@ -56,24 +57,20 @@ export function FileIndex({ files, activePath, reviewed, colors, onJump }: { fil
     </Pressable>}
   />;
 }
-function tint(color: string, fallback: string): string {
-  if (/^#[0-9a-f]{6}$/i.test(color)) return color + "1c";
-  const rgb = /^rgba?\(\s*(\d+)[, ]+\s*(\d+)[, ]+\s*(\d+)/.exec(color);
-  return rgb ? `rgba(${rgb[1]},${rgb[2]},${rgb[3]},0.11)` : fallback;
-}
-export function CodeLine({ row, colors, onHeight }: { row: Extract<ReviewRow, { kind: "code" }>; colors: Colors; onHeight(height: number): void }) {
+export function CodeLine({ row, colors, typography, onHeight }: { row: Extract<ReviewRow, { kind: "code" }>; colors: Colors; typography: CodeAppearance; onHeight(height: number): void }) {
+  const { fontFamily, fontSize, lineHeight, gutterFontSize, gutterCellWidth, markerWidth } = typography;
   const { line, tokens } = row;
   const add = line.kind === "add", remove = line.kind === "remove";
   const tone = add ? colors.statusSuccess : remove ? colors.statusDanger : colors.foregroundMuted;
   const palette = { plain: colors.foreground, comment: colors.foregroundMuted, string: colors.statusSuccess, keyword: colors.accent, number: colors.statusWarning, type: colors.statusWarning, function: colors.accent };
-  return <View onLayout={(event) => onHeight(event.nativeEvent.layout.height)} style={{ minHeight: 20, flexDirection: "row", alignItems: "flex-start", paddingRight: 8,
-    backgroundColor: add || remove ? tint(tone, colors.surface1) : colors.surface0, borderLeftWidth: 3, borderLeftColor: add || remove ? tone : "transparent" }}>
-    <Text style={{ width: 32, flexShrink: 0, textAlign: "right", paddingRight: 5, lineHeight: 20, color: colors.foregroundMuted, fontFamily: mono, fontSize: 10 }}>{line.old ?? ""}</Text>
-    <Text style={{ width: 32, flexShrink: 0, textAlign: "right", paddingRight: 6, lineHeight: 20, color: colors.foregroundMuted, fontFamily: mono, fontSize: 10 }}>{line.next ?? ""}</Text>
-    <Text style={{ width: 16, flexShrink: 0, lineHeight: 20, color: tone, fontFamily: mono, fontSize: 12 }}>{add ? "+" : remove ? "−" : " "}</Text>
+  return <View {...codeScopeProps} onLayout={(event) => onHeight(event.nativeEvent.layout.height)} style={{ minHeight: lineHeight, flexDirection: "row", alignItems: "flex-start", paddingRight: 8,
+    backgroundColor: add || remove ? diffBackground(tone, colors.surface0) : colors.surface0, borderLeftWidth: 3, borderLeftColor: add || remove ? tone : "transparent" }}>
+    <Text style={{ width: gutterCellWidth, flexShrink: 0, textAlign: "right", paddingRight: 5, lineHeight, color: colors.foregroundMuted, fontFamily, fontSize: gutterFontSize }}>{line.old ?? ""}</Text>
+    <Text style={{ width: gutterCellWidth, flexShrink: 0, textAlign: "right", paddingRight: 6, lineHeight, color: colors.foregroundMuted, fontFamily, fontSize: gutterFontSize }}>{line.next ?? ""}</Text>
+    <Text style={{ width: markerWidth, flexShrink: 0, lineHeight, color: tone, fontFamily, fontSize }}>{add ? "+" : remove ? "−" : " "}</Text>
     <Text selectable style={[
-      { flex: 1, minWidth: 0, fontSize: 12, lineHeight: 20, fontFamily: mono, color: colors.foreground },
+      { flex: 1, minWidth: 0, fontSize, lineHeight, fontFamily, color: colors.foreground },
       Platform.OS === "web" ? ({ whiteSpace: "pre-wrap", overflowWrap: "anywhere", wordBreak: "break-all" } as unknown as TextStyle) : null,
-    ]}>{tokens.map((token, index) => <Text key={index} style={{ color: palette[token.kind], fontFamily: mono, fontSize: 12, lineHeight: 20 }}>{token.text}</Text>)}</Text>
+    ]}>{tokens.map((token, index) => <Text key={index} style={{ color: palette[token.kind], fontFamily, fontSize, lineHeight }}>{token.text}</Text>)}</Text>
   </View>;
 }

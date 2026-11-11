@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-/** Keep virtual scroll offsets aligned with the actual heights of wrapped code. */
-export function useRowMeasurements(width: number) {
+/** Keep virtual scroll offsets aligned with the actual heights of wrapped code. The key includes both width and typography. */
+export function useRowMeasurements(width: string) {
   const [measured, setMeasured] = useState({ width, rows: new Map<string, number>() });
   const current = useRef(measured);
   current.current = measured;
@@ -10,7 +10,7 @@ export function useRowMeasurements(width: number) {
   const pending = useRef(new Map<string, number>());
   const pendingWidth = useRef(width);
   const frame = useRef<number | null>(null);
-  const report = useCallback((key: string, height: number, measuredWidth: number) => {
+  const report = useCallback((key: string, height: number, measuredWidth: string) => {
     if (measuredWidth !== currentWidth.current || !Number.isFinite(height) || height <= 0) return;
     const previous = current.current.width === measuredWidth ? current.current.rows.get(key) : undefined;
     if (previous !== undefined && Math.abs(previous - height) < 0.5) return;

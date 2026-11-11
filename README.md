@@ -35,6 +35,7 @@ The panel automatically binds to the latest explicit DevSpace workspace target i
 - **Uncommitted** compares against HEAD, including staged and unstaged edits and untracked files.
 - All file diffs appear in one continuous document, with syntax highlighting, old/new line numbers, colored changes, and omitted-context separators.
 - Code wraps automatically to the available width, including when resizing the file index. Original source and line numbers are preserved; no horizontal scrolling is needed.
+- On desktop and browser clients, code follows Paseo's saved monospace font and code size, with a 14px minimum for readability. Font changes update the review without reinstalling. Added and deleted lines use deeper, theme-derived background fills.
 - Labels, commands, counts, accessibility text, and notices follow Paseo's current app language, with English and Simplified Chinese translations. Language changes take effect without reinstalling the plugin.
 - The flat file index on the right jumps to the file in that document. On a narrow panel, the list button opens the same index. There is no directory tree or per-file page navigation.
 - Drag the divider between the diff and the file index to resize the index. The width is saved with the tab and constrained so the code area stays usable.
@@ -55,3 +56,5 @@ paseo plugin reload paseo-devspace-sidecar
 ```
 
 The Mac tunnel uses `~/Library/LaunchAgents/com.normanzuo.paseo-devspace-sidecar.plist`; SSH errors are in `~/.config/paseo-devspace-sidecar/tunnel.log`. To remove the integration, uninstall the plugin on both hosts and unload that launch agent. Source and configuration remain for you to keep or delete.
+
+Paseo 0.15.x's public plugin theme exposes colors but no typography. The isolated `client/web.ts` adapter reads only `monoFontFamily` and `codeFontSize` from the client's saved appearance settings and never writes them. Unsupported storage formats fall back to the platform monospace stack and 14px. Code rows opt out of Paseo's interface-font CSS override; native mobile clients currently use their platform monospace fallback.
