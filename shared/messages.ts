@@ -1,0 +1,48 @@
+export const en = {
+  codeReview: "Code review", openReview: "Open DevSpace Diff", commandDescription: "Review live DevSpace changes in the right sidebar",
+  taskChanges: "Task changes", uncommitted: "Uncommitted", files_one: "{{count}} file", files_other: "{{count}} files", reviewedCount: " · {{count}} reviewed",
+  filterFiles: "Filter files", filterPlaceholder: "Filter files…", expandAll: "Expand all files", collapseAll: "Collapse all files",
+  openIndex: "Open file index", closeIndex: "Close file index", changedFiles: "Changed files", refresh: "Refresh DevSpace diff",
+  noAssociation: "No DevSpace workspace for this session", noAssociationHelp: "Open this panel in a task that uses DevSpace. Its changes will appear automatically.",
+  noMatches: "No matching files", noChanges: "No file changes in this comparison", unchangedLines: "{{count}} unchanged lines", context: "Context",
+  loadFile: "Load this file's diff", loadFileLabel: "Load diff for {{path}}", newFile: "New", expandFile: "Expand {{path}}", collapseFile: "Collapse {{path}}",
+  markReviewed: "Mark {{path}} as reviewed", clearReviewed: "Mark {{path}} as not reviewed", jumpFile: "Jump to {{path}}",
+  resizeIndex: "Resize file list", resizeHint: "Drag left or right to resize the file list", pixels: "{{width}} pixels", widenIndex: "Widen file list", narrowIndex: "Narrow file list",
+  noNewline: "No newline at end of file", fileReadFailed: "Unable to read this file. Refresh and try again.", fileReadRetry: "Unable to read this file. Click to retry.",
+  sessionUnavailable: "Unable to read this session. Refresh and try again.", workspaceUnavailable: "This session's DevSpace workspace is no longer available.",
+  binaryChanged: "Binary file changed. Text diff is unavailable.", newBinary: "New binary file. Text diff is unavailable.",
+  newTooLarge: "New file exceeds the 512 KiB text preview limit.", patchTooLarge: "Diff exceeds the 768 KiB preview limit.", newEmpty: "New empty file.",
+  noDifference: "No text difference remains. Refresh the file list.", offline: "Cannot reach the Mac diff bridge. Check that the Mac Paseo plugin and private tunnel are running.",
+  noBase: "This workspace has no task starting commit. Choose Uncommitted instead.", changedFileMissing: "This file is no longer in the changed-file list. Refresh the panel.",
+} as const;
+
+export const zh: Record<keyof typeof en, string> = {
+  codeReview: "代码审阅", openReview: "打开 DevSpace Diff", commandDescription: "在右侧审阅 DevSpace 的实时文件改动",
+  taskChanges: "任务改动", uncommitted: "未提交", files_one: "{{count}} 个文件", files_other: "{{count}} 个文件", reviewedCount: " · 已查看 {{count}}",
+  filterFiles: "筛选文件", filterPlaceholder: "筛选文件…", expandAll: "展开所有文件", collapseAll: "折叠所有文件",
+  openIndex: "打开文件索引", closeIndex: "关闭文件索引", changedFiles: "变更文件", refresh: "刷新 DevSpace diff",
+  noAssociation: "当前会话未关联 DevSpace", noAssociationHelp: "在使用 DevSpace 修改代码的任务会话中打开，改动会自动显示。",
+  noMatches: "没有匹配的文件", noChanges: "这个范围内没有文件改动", unchangedLines: "{{count}} 行未改动", context: "上下文",
+  loadFile: "点击加载此文件差异", loadFileLabel: "加载差异 {{path}}", newFile: "新建", expandFile: "展开文件 {{path}}", collapseFile: "折叠文件 {{path}}",
+  markReviewed: "标为已查看 {{path}}", clearReviewed: "取消已查看 {{path}}", jumpFile: "定位文件 {{path}}",
+  resizeIndex: "调整文件列表宽度", resizeHint: "左右拖动分隔线调整文件列表宽度", pixels: "{{width}} 像素", widenIndex: "加宽文件列表", narrowIndex: "缩窄文件列表",
+  noNewline: "文件末尾没有换行", fileReadFailed: "暂时无法读取此文件，请刷新后重试。", fileReadRetry: "读取失败，点击重试。",
+  sessionUnavailable: "暂时无法读取当前会话，请稍后刷新。", workspaceUnavailable: "此会话使用的 DevSpace 工作区已不可用。",
+  binaryChanged: "二进制文件已修改，无法显示文本差异。", newBinary: "新增二进制文件，无法显示文本差异。",
+  newTooLarge: "新文件超过 512 KiB 的文本预览限制。", patchTooLarge: "差异超过 768 KiB 的预览限制。", newEmpty: "新增空文件。",
+  noDifference: "此文件已没有文本差异，请刷新文件列表。", offline: "无法连接 Mac 差异服务，请检查 Mac 上的 Paseo 插件和私有隧道。",
+  noBase: "此工作区没有任务起点提交，请切换到未提交视图。", changedFileMissing: "此文件已不在变更列表中，请刷新面板。",
+};
+
+export const backendMessages = {
+  "No newline at end of file.": "noNewline", "Load this file's diff.": "loadFile",
+  "Unable to read this file. Refresh and try again.": "fileReadFailed", "Unable to read this file. Click to retry.": "fileReadRetry",
+  "Unable to read this session. Refresh and try again.": "sessionUnavailable", "This session's DevSpace workspace is no longer available.": "workspaceUnavailable",
+  "Binary file changed. Text diff is unavailable.": "binaryChanged", "New binary file. Text diff is unavailable.": "newBinary",
+  "New file exceeds the 512 KiB text preview limit.": "newTooLarge", "Diff exceeds the 768 KiB preview limit.": "patchTooLarge", "New empty file.": "newEmpty",
+  "No text difference remains. Refresh the file list.": "noDifference",
+  "Cannot reach the Mac diff bridge. Check that the Mac Paseo plugin and the private tunnel are running.": "offline",
+  "This workspace has no task starting commit. Choose Uncommitted instead.": "noBase",
+  "This file is no longer in the changed-file list. Refresh the panel.": "changedFileMissing",
+  "DevSpace workspace is unavailable or no longer active. Choose another workspace.": "workspaceUnavailable",
+} as const satisfies Readonly<Record<string, keyof typeof en>>;

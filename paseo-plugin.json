@@ -1,0 +1,9 @@
+{
+  "id": "paseo-devspace-sidecar",
+  "name": "DevSpace Diff",
+  "description": "Live file changes from the actual DevSpace worktree, including when your agent runs on another host.",
+  "media": [],
+  "requirements": {
+    "paseo": ">=0.15.4"
+  }
+}
