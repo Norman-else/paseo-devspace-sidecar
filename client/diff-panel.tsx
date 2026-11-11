@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View, type FlatList as NativeFlatList, type ViewToken } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRpc, useTabState, type PluginAgentPanelProps } from "@getpaseo/plugin/client";
-import { FlatList, Icon, TextInput } from "@getpaseo/plugin/client/ui";
+import { FlatList, Icon } from "@getpaseo/plugin/client/ui";
 import { z } from "zod";
 import { catalogRpc, comparison, fileRpc, pullRequestRpc, reviewRpc, snapshotRpc, type ReviewFile } from "../shared/diff";
 import { reviewRows, type ReviewRow } from "../shared/review";
@@ -13,6 +13,7 @@ import { useMessages } from "./messages";
 import { useCodeAppearance } from "./use-code-appearance";
 import { PullRequestStatus } from "./pull-request-status";
 import { reviewHeader } from "../shared/review-header";
+import { ReviewToolbar } from "./review-toolbar";
 
 const stateSchema = z.object({ comparison, scope: z.string().default(""), collapsed: z.array(z.string()).default([]), reviewed: z.record(z.string(), z.string()).default({}), indexWidth: z.number().min(140).max(520).nullable().default(null) });
 export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
@@ -106,31 +107,17 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
     </> : null}
     <ToolButton icon="RefreshCw" label={t("refresh")} colors={colors} onPress={refresh} />
   </View>;
-  const controls = <View style={{ gap: 8 }}>
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-      <View style={{ flexDirection: "row", backgroundColor: colors.surface1, borderRadius: 5, padding: 2 }}>
-        {(["task", "uncommitted"] as const).map((mode) => <Pressable key={mode} accessibilityRole="button" accessibilityState={{ selected: mode === state.comparison }}
-          onPress={() => save({ ...state, comparison: mode, scope: "", collapsed: [], reviewed: {} })} style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 3, backgroundColor: mode === state.comparison ? colors.surface2 : colors.surface1 }}>
-          <Text style={{ color: mode === state.comparison ? colors.foreground : colors.foregroundMuted, fontSize: 10 }}>{t(mode === "task" ? "taskChanges" : "uncommitted")}</Text>
-        </Pressable>)}
-      </View>
-      <Text style={{ color: colors.foregroundMuted, fontSize: 10, flex: 1 }}>{snapshot.data ? t("files", { count: snapshot.data.totalFiles }) : ""}{reviewedCount ? t("reviewedCount", { count: reviewedCount }) : ""}</Text>
-      {totals ? <><Text style={{ color: colors.statusSuccess, fontSize: 10 }}>+{totals.plus}</Text><Text style={{ color: colors.statusDanger, fontSize: 10 }}>−{totals.minus}</Text></> : null}
-      {hasPr ? actions : null}
-    </View>
-    {searchOpen ? <TextInput value={search} onChangeText={setSearch} autoFocus placeholder={t("filterPlaceholder")} accessibilityLabel={t("filterFiles")} style={{ color: colors.foreground, borderWidth: 1, borderColor: colors.border, borderRadius: 4, padding: 7, fontSize: 12 }} /> : null}
-  </View>;
   return <View style={{ flex: 1, minHeight: 0, backgroundColor: colors.surface0 }} testID="devspace-diff-panel">
-    {hasPr ? <PullRequestStatus key={`${bound!.id}:${bound!.branch}`} result={pullRequests.data} loading={false} error={null} colors={colors}>{controls}</PullRequestStatus>
-      : <View style={{ paddingHorizontal: 12, paddingVertical: 8, gap: 8, borderBottomWidth: 1, borderColor: colors.border }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Icon name={bound ? "GitBranch" : "FileDiff"} size={14} color={colors.foregroundMuted} />
-          <Text style={{ color: colors.foreground, fontSize: 12, fontWeight: "600", flex: 1 }} numberOfLines={1}>{bound?.branch ?? t("codeReview")}</Text>
-          {actions}
-        </View>
-        {bound ? controls : null}
+    {hasPr ? <PullRequestStatus key={`${bound!.id}:${bound!.branch}`} result={pullRequests.data} loading={false} error={null} colors={colors} />
+      : <View style={{ paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <Icon name={bound ? "GitBranch" : "FileDiff"} size={14} color={colors.foregroundMuted} />
+        <Text style={{ color: colors.foreground, fontSize: 12, fontWeight: "600", flex: 1 }} numberOfLines={1}>{bound?.branch ?? t("codeReview")}</Text>
+        {!bound ? actions : null}
       </View>}
     {header.showPrNotice ? <PullRequestStatus result={pullRequests.data} loading={pullRequests.isPending} error={pullRequests.error} colors={colors} /> : null}
+    {bound ? <ReviewToolbar mode={state.comparison} fileCount={snapshot.data?.totalFiles} reviewedCount={reviewedCount} totals={totals}
+      searchOpen={searchOpen} search={search} colors={colors} onSearchChange={setSearch}
+      onModeChange={(comparison) => save({ ...state, comparison, scope: "", collapsed: [], reviewed: {} })}>{actions}</ReviewToolbar> : null}
     {error ? <Text selectable style={{ color: colors.statusDanger, padding: 12, fontSize: 12 }}>{translateBackend(error.message)}</Text> : null}
     {catalog.isPending || (bound && !document.data && (snapshot.isPending || document.isPending)) ? <ActivityIndicator color={colors.foregroundMuted} style={{ margin: 24 }} /> : null}
     {!catalog.isPending && !bound ? <View style={{ padding: 20, gap: 8 }}><Text style={{ color: colors.foreground, fontSize: 13 }}>{t("noAssociation")}</Text><Text style={{ color: colors.foregroundMuted, fontSize: 12, lineHeight: 20 }}>{catalog.data?.inferenceError ? translateBackend(catalog.data.inferenceError) : t("noAssociationHelp")}</Text></View> : null}

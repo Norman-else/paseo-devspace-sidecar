@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { ExternalLink, Icon, ScrollView } from "@getpaseo/plugin/client/ui";
 import type { PullRequest, PullRequestResult } from "../shared/pull-request";
@@ -7,8 +7,8 @@ import type { Colors } from "./review-ui";
 import { useMessages } from "./messages";
 
 type Available = Extract<PullRequestResult, { status: "available" }>;
-export function PullRequestStatus({ result, loading, error, colors, children }: {
-  result?: PullRequestResult; loading: boolean; error: Error | null; colors: Colors; children?: ReactNode;
+export function PullRequestStatus({ result, loading, error, colors }: {
+  result?: PullRequestResult; loading: boolean; error: Error | null; colors: Colors;
 }) {
   const { t } = useMessages();
   const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
@@ -23,20 +23,18 @@ export function PullRequestStatus({ result, loading, error, colors, children }: 
   if (result.status === "none") return null;
   const active = result.pullRequests.find((pr) => pr.number === selectedNumber) ?? result.pullRequests[0];
   if (!active) return null;
-  const needsAttention = active.checks.failed > 0 || active.review === "CHANGES_REQUESTED" || (active.state === "OPEN" && active.conflicts);
-  return <View style={{ margin: 12, marginBottom: 4, padding: 12, gap: 10, borderWidth: 1, borderColor: needsAttention ? colors.statusDanger : colors.border, borderRadius: 8, backgroundColor: colors.surface1 }} testID="devspace-pull-request-status">
+  return <View style={{ paddingHorizontal: 12, paddingVertical: 10, gap: 6, borderBottomWidth: 1, borderColor: colors.border, backgroundColor: colors.surface0 }} testID="devspace-pull-request-status">
     {result.pullRequests.length > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 2 }}>
       {result.pullRequests.map((pr) => <Pressable key={pr.number} accessibilityRole="button" accessibilityLabel={t("prSelect", { number: pr.number })} accessibilityState={{ selected: active.number === pr.number }}
         onPress={() => setSelectedNumber(pr.number)} style={{ paddingHorizontal: 8, paddingVertical: 5, borderRadius: 4, backgroundColor: active.number === pr.number ? colors.surface2 : colors.surface1 }}>
         <Text style={{ fontSize: 11, color: active.number === pr.number ? colors.foreground : colors.foregroundMuted }}>#{pr.number} → {pr.baseBranch}</Text>
       </Pressable>)}
     </ScrollView> : null}
-    <PullRequestCard key={active.number} pr={active} result={result} colors={colors} />
-    {children ? <View style={{ borderTopWidth: 1, borderColor: colors.border, paddingTop: 10 }}>{children}</View> : null}
+    <PullRequestSummary key={active.number} pr={active} result={result} colors={colors} />
   </View>;
 }
 
-function PullRequestCard({ pr, result, colors }: { pr: PullRequest; result: Available; colors: Colors }) {
+function PullRequestSummary({ pr, result, colors }: { pr: PullRequest; result: Available; colors: Colors }) {
   const { t } = useMessages();
   const [expanded, setExpanded] = useState(false);
   const stateKey = { OPEN: "prOpen", DRAFT: "prDraft", MERGED: "prMerged", CLOSED: "prClosed" } as const;
@@ -45,27 +43,24 @@ function PullRequestCard({ pr, result, colors }: { pr: PullRequest; result: Avai
   const checkTone = checks.status === "failed" ? colors.statusDanger : checks.status === "passed" ? colors.statusSuccess : checks.status === "pending" ? colors.statusWarning : colors.foregroundMuted;
   const checksLabel = checks.status === "passed" ? t("prChecksPassed", { count: checks.passed }) : checks.status === "failed" ? t("prChecksFailed", { count: checks.failed }) : checks.status === "pending" ? t("prChecksPending", { count: checks.pending }) : t(checks.status === "none" ? "prNoChecks" : checks.status === "skipped" ? "prChecksSkipped" : "prChecksUnknown");
   return <>
-    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-      <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, color: colors.foregroundMuted, fontSize: 11, lineHeight: 16 }}>{result.repository}</Text>
-      <ExternalLink href={pr.url}><Text style={{ color: colors.accent, fontSize: 11, lineHeight: 16 }}>{t("prOpenOnGitHub")}</Text></ExternalLink>
-    </View>
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-      <Icon name={pr.state === "MERGED" ? "GitMerge" : "GitPullRequest"} size={18} color={tone} />
-      <Text style={{ color: colors.foregroundMuted, fontSize: 11 }}>{t("prSection")}</Text>
+    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+      <View style={{ flex: 1, minWidth: 0, minHeight: 24, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+      <Icon name={pr.state === "MERGED" ? "GitMerge" : "GitPullRequest"} size={16} color={tone} />
+      <Text numberOfLines={1} ellipsizeMode="middle" style={{ flexShrink: 1, minWidth: 0, maxWidth: "30%", color: colors.foregroundMuted, fontSize: 11, lineHeight: 16 }}>{result.repository}</Text>
+      <Text style={{ color: colors.foregroundMuted, fontSize: 11 }}>/</Text>
       <View style={{ flexShrink: 0 }}><ExternalLink href={pr.url} accessibilityLabel={t("prOpenLink", { number: pr.number })}>
-        <Text style={{ color: colors.foreground, fontSize: 14, fontWeight: "700" }}>#{pr.number}</Text>
+        <Text style={{ color: colors.foreground, fontSize: 14, fontWeight: "600" }}>PR #{pr.number}</Text>
       </ExternalLink></View>
-      <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 5, paddingLeft: 8 }}>
+      <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 140, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 5 }}>
         <Icon name="GitBranch" size={12} color={colors.foregroundMuted} />
         <Text selectable numberOfLines={1} ellipsizeMode="middle" accessibilityLabel={t("prBranchDirection", { source: result.branch, target: pr.baseBranch })}
           style={{ flex: 1, minWidth: 0, color: colors.foregroundMuted, fontSize: 11, lineHeight: 16 }}>{result.branch} → {pr.baseBranch}</Text>
       </View>
-      <StatusBadge label={t(stateKey[pr.state])} tone={tone} colors={colors} />
+      </View>
+      <StatusBadge label={t(stateKey[pr.state])} tone={tone} colors={colors} filled />
     </View>
-    <ExternalLink href={pr.url} accessibilityLabel={t("prOpenLink", { number: pr.number })}>
-      <Text numberOfLines={2} style={{ color: colors.foreground, fontSize: 13, fontWeight: "500", lineHeight: 19 }}>{pr.title}</Text>
-    </ExternalLink>
-    <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+    <Text numberOfLines={2} style={{ color: colors.foreground, fontSize: 13, fontWeight: "500", lineHeight: 19 }}>{pr.title}</Text>
+    <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
       <StatusBadge label={checksLabel} icon={checks.status === "passed" ? "CircleCheck" : checks.status === "failed" ? "CircleX" : "CircleDot"}
         tone={checkTone} colors={colors} expanded={expanded} onPress={checks.total ? () => setExpanded(!expanded) : undefined} accessibilityLabel={t("prToggleChecks")} />
       {checks.skipped > 0 && checks.status !== "skipped" ? <StatusBadge label={t("prSkippedCount", { count: checks.skipped })} tone={colors.foregroundMuted} colors={colors} /> : null}
@@ -92,12 +87,14 @@ function PullRequestCard({ pr, result, colors }: { pr: PullRequest; result: Avai
   </>;
 }
 
-function StatusBadge({ label, icon, tone, colors, onPress, expanded, accessibilityLabel }: { label: string; icon?: string; tone: string; colors: Colors; onPress?(): void; expanded?: boolean; accessibilityLabel?: string }) {
+function StatusBadge({ label, icon, tone, colors, onPress, expanded, accessibilityLabel, filled = false }: { label: string; icon?: string; tone: string; colors: Colors; onPress?(): void; expanded?: boolean; accessibilityLabel?: string; filled?: boolean }) {
   const content = <>
     {icon ? <Icon name={icon} size={12} color={tone} /> : null}
     <Text style={{ fontSize: 11, lineHeight: 16, fontWeight: "500", color: tone }}>{label}</Text>
     {onPress ? <Icon name={expanded ? "ChevronUp" : "ChevronDown"} size={10} color={tone} /> : null}
   </>;
-  const style = { minHeight: 26, flexDirection: "row" as const, alignItems: "center" as const, gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 5, backgroundColor: diffBackground(tone, colors.surface1) };
+  const style = { minHeight: filled ? 24 : 20, flexDirection: "row" as const, alignItems: "center" as const, gap: 4,
+    paddingHorizontal: filled ? 8 : 0, paddingVertical: filled ? 4 : 2, borderRadius: filled ? 4 : 0,
+    backgroundColor: filled ? diffBackground(tone, colors.surface0) : "transparent" };
   return onPress ? <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} accessibilityState={{ expanded }} onPress={onPress} style={style}>{content}</Pressable> : <View style={style}>{content}</View>;
 }
