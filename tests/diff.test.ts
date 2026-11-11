@@ -16,6 +16,7 @@ import { diffLines, suggestedWorkspace, type Workspace } from "../shared/diff.ts
 import { reviewRows } from "../shared/review.ts";
 import { codeTokens } from "../shared/syntax.ts";
 import { en, zh } from "../shared/messages.ts";
+import { RemoteSources } from "../server/remote-sources.ts";
 
 const exec = promisify(execFile);
 async function fixture() {
@@ -83,18 +84,66 @@ test("task comparison survives commits and refresh detects same-count edits", as
   } finally { await f.cleanup(); }
 });
 
-test("limits file access to registered workspaces and current changed paths; previews symlinks as links", async () => {
+test("limits file access to registered workspaces and current changed paths; previews symlinks as links", async (t) => {
   const f = await fixture();
   try {
     await assert.rejects(() => f.service.snapshot("ws_unknown", "task"), /unavailable/);
     await assert.rejects(() => f.service.file("ws_test", "task", "../private"), /Invalid/);
     await assert.rejects(() => f.service.file("ws_test", "task", "/etc/passwd"), /Invalid/);
     await assert.rejects(() => f.service.file("ws_test", "task", "unchanged.txt"), /changed-file list/);
-    await symlink("/etc/passwd", join(f.root, "link"));
-    const link = await f.service.file("ws_test", "task", "link");
-    assert.match(link.patch, /\+\/etc\/passwd/); assert.doesNotMatch(link.patch, /root:/);
+    const external = join(tmpdir(), "sidecar-outside-link-target");
+    try {
+      await symlink(external, join(f.root, "link"));
+      const link = await f.service.file("ws_test", "task", "link");
+      assert.ok(link.patch.includes("+" + external));
+    } catch (error) {
+      if (process.platform !== "win32" || (error as NodeJS.ErrnoException).code !== "EPERM") throw error;
+      t.diagnostic("Windows denied symlink creation; all other path checks still ran.");
+    }
     await writeFile(join(f.root, "large.txt"), "x".repeat(600000));
     assert.match((await f.service.file("ws_test", "task", "large.txt")).notice!, /limit/);
+  } finally { await f.cleanup(); }
+});
+
+test("remote sources route Windows and Mac workspaces independently and tolerate an offline host", async () => {
+  const mac = await fixture(), windows = await fixture();
+  const db = new DatabaseSync(join(windows.root, "registry.sqlite"));
+  db.exec("UPDATE workspace_sessions SET id='ws_windows'"); db.close();
+  await writeFile(join(mac.root, "change.txt"), "Mac project\n");
+  await writeFile(join(windows.root, "change.txt"), "Windows project\r\n");
+  const tokenMac = "m".repeat(40), tokenWindows = "w".repeat(40);
+  const bridges = await Promise.all([
+    startBridge({ mode: "local", port: 0, databasePath: "unused", token: tokenMac }, mac.service),
+    startBridge({ mode: "local", port: 0, databasePath: "unused", token: tokenWindows }, windows.service),
+  ]);
+  const endpoint = (server: typeof bridges[number]) => { const address = server.address(); assert.ok(address && typeof address !== "string"); return `http://127.0.0.1:${address.port}`; };
+  try {
+    const sources = [{ endpoint: endpoint(bridges[0]), token: tokenMac }, { endpoint: endpoint(bridges[1]), token: tokenWindows }];
+    const router = new RemoteSources([...sources, { endpoint: "http://127.0.0.1:9", token: "o".repeat(40) }]);
+    const catalog = await router.request({ op: "catalog" }) as Workspace[];
+    assert.deepEqual(catalog.map((workspace) => workspace.id).sort(), ["ws_test", "ws_windows"]);
+    const patch = await router.request({ op: "file", workspaceId: "ws_windows", comparison: "task", path: "change.txt" }) as { patch: string };
+    assert.match(patch.patch, /Windows project/); assert.doesNotMatch(patch.patch, /Mac project/);
+    const db = new DatabaseSync(join(windows.root, "registry.sqlite"));
+    db.exec("UPDATE workspace_sessions SET id='ws_test'"); db.close();
+    const conflicting = new RemoteSources(sources);
+    assert.equal((await conflicting.request({ op: "catalog" }) as Workspace[]).length, 0);
+    await assert.rejects(() => conflicting.request({ op: "snapshot", workspaceId: "ws_test", comparison: "task" }), /multiple project hosts/);
+  } finally {
+    for (const bridge of bridges) { bridge.closeAllConnections(); await new Promise<void>((resolve) => bridge.close(() => resolve())); }
+    await mac.cleanup(); await windows.cleanup();
+  }
+});
+
+test("new Windows CRLF files render without carriage returns and remain unchanged on disk", async () => {
+  const f = await fixture();
+  try {
+    const text = "first\r\nsecond\r\n";
+    await writeFile(join(f.root, "new.txt"), text);
+    const patch = await f.service.file("ws_test", "task", "new.txt");
+    assert.doesNotMatch(patch.patch, /\r/);
+    assert.match(patch.patch, /\+first\n\+second\n/);
+    assert.equal(await readFile(join(f.root, "new.txt"), "utf8"), text);
   } finally { await f.cleanup(); }
 });
 

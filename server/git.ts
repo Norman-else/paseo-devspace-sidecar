@@ -1,10 +1,11 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { lstat, readFile, readlink, realpath } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { promisify } from "node:util";
 import type { BridgeRequest, ChangedFile, Review, ReviewFile, Snapshot, Workspace } from "../shared/diff";
+import { isRelativeFile, isWithin, samePath } from "./paths";
 
 const exec = promisify(execFile);
 const MAX_FILES = 2000;
@@ -37,7 +38,7 @@ export class LocalDiff {
     if (!row) throw new Error("DevSpace workspace is unavailable or no longer active. Choose another workspace.");
     const root = await realpath(row.root);
     const top = (await git(root, ["rev-parse", "--show-toplevel"])).trim();
-    if (await realpath(top) !== root) throw new Error("DevSpace workspace must be the root of a Git checkout.");
+    if (!samePath(await realpath(top), root)) throw new Error("DevSpace workspace must be the root of a Git checkout.");
     return { workspace: await this.describe(row), root };
   }
   private async ref(root: string, workspace: Workspace, comparison: "task" | "uncommitted") {
@@ -86,7 +87,7 @@ export class LocalDiff {
     return { workspace, comparison, ref, revision, files: visible, totalFiles: files.size, capturedAt: new Date().toISOString() };
   }
   async file(id: string, comparison: "task" | "uncommitted", path: string) {
-    if (isAbsolute(path) || path.split(/[\\/]/).includes("..") || path.includes("\0")) throw new Error("Invalid file path.");
+    if (!isRelativeFile(path)) throw new Error("Invalid file path.");
     const snapshot = await this.snapshot(id, comparison);
     const file = snapshot.files.find((candidate) => candidate.path === path);
     if (!file) throw new Error("This file is no longer in the changed-file list. Refresh the panel.");
@@ -133,12 +134,12 @@ export class LocalDiff {
         const absolute = join(root, path);
         // Do not follow an untracked directory symlink out of the registered checkout.
         const parent = await realpath(dirname(absolute));
-        if (relative(root, parent).startsWith("..") || isAbsolute(relative(root, parent))) throw new Error("File is outside the workspace.");
+        if (!isWithin(root, parent)) throw new Error("File is outside the workspace.");
         const stat = await lstat(absolute);
         if (stat.size > MAX_CONTENT) return { patch: "", notice: "New file exceeds the 512 KiB text preview limit." };
         const bytes = stat.isSymbolicLink() ? Buffer.from(await readlink(absolute)) : await readFile(absolute);
         if (bytes.includes(0)) return { patch: "", notice: "New binary file. Text diff is unavailable." };
-        const text = bytes.toString("utf8"), lines = text.replace(/\n$/, "").split("\n");
+        const text = bytes.toString("utf8").replace(/\r\n/g, "\n"), lines = text.replace(/\n$/, "").split("\n");
         if (!text) return { patch: `diff --git a/${path} b/${path}\nnew file mode 100644\n`, notice: "New empty file." };
         const patch = `diff --git a/${path} b/${path}\nnew file mode ${stat.isSymbolicLink() ? "120000" : "100644"}\n--- /dev/null\n+++ b/${path}\n@@ -0,0 +1,${lines.length} @@\n${lines.map((line) => "+" + line).join("\n")}\n${text.endsWith("\n") ? "" : "\\ No newline at end of file\n"}`;
         return { patch };

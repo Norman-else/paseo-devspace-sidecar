@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import { URL } from "node:url";
 import { bridgeRequest, type BridgeRequest } from "../shared/diff";
-import type { Config } from "./config";
+import type { Config, RemoteSource } from "./config";
 import { LocalDiff } from "./git";
 
 export async function startBridge(config: Extract<Config, { mode: "local" }>, local: LocalDiff): Promise<Server> {
@@ -37,13 +37,13 @@ export async function startBridge(config: Extract<Config, { mode: "local" }>, lo
   return server;
 }
 
-export async function remoteRequest(config: Extract<Config, { mode: "remote" }>, input: BridgeRequest): Promise<unknown> {
+export async function remoteRequest(config: RemoteSource & { mode?: "remote" }, input: BridgeRequest, timeoutMs = 30000): Promise<unknown> {
   const url = new URL(config.endpoint);
   if (url.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) || url.username || url.password || url.search || url.hash) {
     throw new Error("The sidecar endpoint must be a loopback HTTP address reached through the private tunnel.");
   }
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(new URL("/rpc", url).toString(), {
       method: "POST", redirect: "error", signal: controller.signal,
@@ -54,7 +54,7 @@ export async function remoteRequest(config: Extract<Config, { mode: "remote" }>,
     return value;
   } catch (error) {
     if (error instanceof TypeError || (error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name))) {
-      throw new Error("Cannot reach the Mac diff bridge. Check that the Mac Paseo plugin and the private tunnel are running.");
+      throw new Error("Cannot reach the project host's diff bridge. Check its Paseo plugin and private tunnel.");
     }
     throw error;
   } finally { clearTimeout(timeout); }

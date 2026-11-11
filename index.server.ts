@@ -2,12 +2,16 @@ import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { z } from "zod";
 import { catalogRpc, devspaceWorkspaceIds, fileRpc, fileResultSchema, reviewRpc, reviewSchema, snapshotRpc, snapshotSchema, suggestedWorkspace, workspaceSchema, type BridgeRequest } from "./shared/diff";
 import { loadConfig } from "./server/config";
-import { remoteRequest, startBridge } from "./server/bridge";
+import { startBridge } from "./server/bridge";
 import { LocalDiff } from "./server/git";
+import { RemoteSources } from "./server/remote-sources";
 
 export default function contribute(server: PluginServerContext) {
   const ready = loadConfig().then(async (config) => {
-    if (config.mode === "remote") return { request: (input: BridgeRequest) => remoteRequest(config, input), close: () => {} };
+    if (config.mode === "remote") {
+      const sources = new RemoteSources([config, ...config.additionalSources]);
+      return { request: (input: BridgeRequest) => sources.request(input), close: () => {} };
+    }
     const local = new LocalDiff(config.databasePath);
     const bridge = await startBridge(config, local);
     return {

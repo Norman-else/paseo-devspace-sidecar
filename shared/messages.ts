@@ -12,7 +12,7 @@ export const en = {
   sessionUnavailable: "Unable to read this session. Refresh and try again.", workspaceUnavailable: "This session's DevSpace workspace is no longer available.",
   binaryChanged: "Binary file changed. Text diff is unavailable.", newBinary: "New binary file. Text diff is unavailable.",
   newTooLarge: "New file exceeds the 512 KiB text preview limit.", patchTooLarge: "Diff exceeds the 768 KiB preview limit.", newEmpty: "New empty file.",
-  noDifference: "No text difference remains. Refresh the file list.", offline: "Cannot reach the Mac diff bridge. Check that the Mac Paseo plugin and private tunnel are running.",
+  noDifference: "No text difference remains. Refresh the file list.", offline: "Cannot reach the project host's diff bridge. Check its Paseo plugin and private tunnel.",
   noBase: "This workspace has no task starting commit. Choose Uncommitted instead.", changedFileMissing: "This file is no longer in the changed-file list. Refresh the panel.",
 } as const;
 
@@ -30,7 +30,7 @@ export const zh: Record<keyof typeof en, string> = {
   sessionUnavailable: "暂时无法读取当前会话，请稍后刷新。", workspaceUnavailable: "此会话使用的 DevSpace 工作区已不可用。",
   binaryChanged: "二进制文件已修改，无法显示文本差异。", newBinary: "新增二进制文件，无法显示文本差异。",
   newTooLarge: "新文件超过 512 KiB 的文本预览限制。", patchTooLarge: "差异超过 768 KiB 的预览限制。", newEmpty: "新增空文件。",
-  noDifference: "此文件已没有文本差异，请刷新文件列表。", offline: "无法连接 Mac 差异服务，请检查 Mac 上的 Paseo 插件和私有隧道。",
+  noDifference: "此文件已没有文本差异，请刷新文件列表。", offline: "无法连接项目主机的差异服务，请检查该主机上的 Paseo 插件和私有隧道。",
   noBase: "此工作区没有任务起点提交，请切换到未提交视图。", changedFileMissing: "此文件已不在变更列表中，请刷新面板。",
 };
 
@@ -42,6 +42,7 @@ export const backendMessages = {
   "New file exceeds the 512 KiB text preview limit.": "newTooLarge", "Diff exceeds the 768 KiB preview limit.": "patchTooLarge", "New empty file.": "newEmpty",
   "No text difference remains. Refresh the file list.": "noDifference",
   "Cannot reach the Mac diff bridge. Check that the Mac Paseo plugin and the private tunnel are running.": "offline",
+  "Cannot reach the project host's diff bridge. Check its Paseo plugin and private tunnel.": "offline",
   "This workspace has no task starting commit. Choose Uncommitted instead.": "noBase",
   "This file is no longer in the changed-file list. Refresh the panel.": "changedFileMissing",
   "DevSpace workspace is unavailable or no longer active. Choose another workspace.": "workspaceUnavailable",
