@@ -2,11 +2,16 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { lstat, readFile, readlink, realpath } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { homedir } from "node:os";
 import { DatabaseSync } from "node:sqlite";
 import { promisify } from "node:util";
 import type { BridgeRequest, ChangedFile, Review, ReviewFile, Snapshot, Workspace } from "../shared/diff";
 import { isRelativeFile, isWithin, samePath } from "./paths";
 import { PullRequests } from "./pull-requests";
+import { GitHubReview } from "./github-review";
+import { Checkpoints } from "./checkpoints";
+import type { ReviewOptions } from "../shared/review-details";
+type Comparison = Snapshot["comparison"];
 
 const exec = promisify(execFile);
 const MAX_FILES = 2000;
@@ -20,8 +25,13 @@ export async function git(root: string, args: string[], maxBuffer = 8 * 1024 * 1
 type StoredWorkspace = { id: string; root: string; source_root: string | null; mode: string; base_sha: string | null; last_used_at: string };
 export class LocalDiff {
   private reviews = new Map<string, { revision: string; promise: Promise<Review> }>();
-  private github = new PullRequests();
-  constructor(private databasePath: string) {}
+  private github: PullRequests;
+  private githubReview: GitHubReview;
+  private checkpoints: Checkpoints;
+  private pullCache = new Map<string, { expires: number; value: ReturnType<LocalDiff["readPullRequests"]> }>();
+  constructor(private databasePath: string, stateDirectory = join(homedir(), ".config/paseo-devspace-sidecar/reviews"), dependencies?: { github?: PullRequests; review?: GitHubReview }) {
+    this.github = dependencies?.github ?? new PullRequests(); this.githubReview = dependencies?.review ?? new GitHubReview(); this.checkpoints = new Checkpoints(stateDirectory);
+  }
   private rows(): StoredWorkspace[] {
     const db = new DatabaseSync(this.databasePath, { readOnly: true });
     try {
@@ -43,13 +53,24 @@ export class LocalDiff {
     if (!samePath(await realpath(top), root)) throw new Error("DevSpace workspace must be the root of a Git checkout.");
     return { workspace: await this.describe(row), root };
   }
-  private async ref(root: string, workspace: Workspace, comparison: "task" | "uncommitted") {
-    const ref = comparison === "task" ? workspace.baseSha : "HEAD";
+  private async ref(root: string, workspace: Workspace, comparison: Comparison, options: ReviewOptions = {}) {
+    const ref = comparison === "local" ? (await this.knownPr(workspace.id, options.prNumber)).pr.headSha : comparison === "task" ? workspace.baseSha : "HEAD";
     if (!ref) throw new Error("This workspace has no task starting commit. Choose Uncommitted instead.");
-    return (await git(root, ["rev-parse", "--verify", `${ref}^{commit}`])).trim();
+    try { return (await git(root, ["rev-parse", "--verify", `${ref}^{commit}`])).trim(); }
+    catch { throw new Error("The comparison commit is unavailable on the project host."); }
   }
   async pullRequests(id: string) {
-    const { workspace, root } = await this.workspace(id);
+    const context = await this.workspace(id);
+    const key = `${id}:${context.root}:${context.workspace.branch}`;
+    const previous = this.pullCache.get(key);
+    if (previous && previous.expires > Date.now()) return previous.value;
+    const value = this.readPullRequests(id, context).catch((error) => { this.pullCache.delete(key); throw error; });
+    this.pullCache.set(key, { expires: Date.now() + 5000, value });
+    if (this.pullCache.size > 32) this.pullCache.delete(this.pullCache.keys().next().value!);
+    return value;
+  }
+  private async readPullRequests(id: string, context?: { workspace: Workspace; root: string }) {
+    const { workspace, root } = context ?? await this.workspace(id);
     if (!workspace.branch) return this.github.unavailable("detached_head");
     try {
       const names = (await git(root, ["remote"])).trim().split(/\r?\n/).filter(Boolean);
@@ -60,9 +81,11 @@ export class LocalDiff {
       return this.github.read({ root, branch: workspace.branch, remote: remote.trim(), localHeadSha: localHeadSha.trim() });
     } catch { return this.github.unavailable("request_failed"); }
   }
-  async snapshot(id: string, comparison: "task" | "uncommitted"): Promise<Snapshot> {
+  async snapshot(id: string, comparison: Comparison, options: ReviewOptions = {}): Promise<Snapshot> {
+    if (options.since) return (await this.sinceReview(id, comparison, options)).snapshot;
+    if (comparison === "pr") return (await this.prReview(id, options.prNumber)).snapshot;
     const { workspace, root } = await this.workspace(id);
-    const ref = await this.ref(root, workspace, comparison);
+    const ref = await this.ref(root, workspace, comparison, options);
     const common = ["--no-ext-diff", "--no-textconv", "--find-renames"];
     const [names, stats, untracked] = await Promise.all([
       git(root, ["diff", ...common, "--name-status", "-z", ref, "--"]),
@@ -95,22 +118,32 @@ export class LocalDiff {
       catch { return [file.path, "missing"]; }
     }));
     const indexPath = (await git(root, ["rev-parse", "--git-path", "index"])).trim();
-    let indexStamp = 0;
-    try { indexStamp = (await lstat(resolve(root, indexPath))).mtimeMs; } catch { /* unborn index */ }
-    const revision = createHash("sha256").update(JSON.stringify([ref, visible, stamps, indexStamp])).digest("hex");
-    return { workspace, comparison, ref, revision, files: visible, totalFiles: files.size, capturedAt: new Date().toISOString() };
+    let indexHash = "";
+    // A stat-cache refresh can touch the index without changing its contents.
+    // Content identity tracks staging changes without invalidating contextual reads.
+    try { indexHash = createHash("sha256").update(await readFile(resolve(root, indexPath))).digest("hex"); } catch { /* unborn index */ }
+    const revision = createHash("sha256").update(JSON.stringify([ref, visible, stamps, indexHash])).digest("hex");
+    return { workspace, comparison, ref, revision, files: visible, totalFiles: files.size, capturedAt: new Date().toISOString(), ...(comparison === "local" ? { prNumber: options.prNumber } : {}) };
   }
-  async file(id: string, comparison: "task" | "uncommitted", path: string) {
+  async file(id: string, comparison: Comparison, path: string, options: ReviewOptions = {}) {
     if (!isRelativeFile(path)) throw new Error("Invalid file path.");
-    const snapshot = await this.snapshot(id, comparison);
+    if (comparison === "pr" || options.since) {
+      const review = options.since ? await this.sinceReview(id, comparison, options) : await this.prReview(id, options.prNumber);
+      const file = review.files.find((file) => file.path === path);
+      if (!file) throw new Error("This file is no longer in the changed-file list. Refresh the panel.");
+      return { patch: file.patch, notice: file.notice };
+    }
+    const snapshot = await this.snapshot(id, comparison, options);
     const file = snapshot.files.find((candidate) => candidate.path === path);
     if (!file) throw new Error("This file is no longer in the changed-file list. Refresh the panel.");
     const { root } = await this.workspace(id);
     return this.readPatch(root, snapshot, file);
   }
-  async review(id: string, comparison: "task" | "uncommitted"): Promise<Review> {
-    const snapshot = await this.snapshot(id, comparison);
-    const key = `${id}:${comparison}`;
+  async review(id: string, comparison: Comparison, options: ReviewOptions = {}): Promise<Review> {
+    if (options.since) return this.sinceReview(id, comparison, options);
+    if (comparison === "pr") return this.prReview(id, options.prNumber);
+    const snapshot = await this.snapshot(id, comparison, options);
+    const key = `${id}:${comparison}:${options.prNumber ?? ""}`;
     const previous = this.reviews.get(key);
     if (previous?.revision === snapshot.revision) return previous.promise;
     const build = async () => {
@@ -165,11 +198,111 @@ export class LocalDiff {
       throw error;
     }
   }
+  private async knownPr(id: string, number?: number) {
+    const result = await this.pullRequests(id);
+    if (result.status !== "available") throw new Error("PR status is unavailable. Refresh to retry.");
+    const pr = number ? result.pullRequests.find((pr) => pr.number === number) : result.pullRequests[0];
+    if (!pr) throw new Error("PR is no longer associated with this workspace.");
+    return { result, pr };
+  }
+  private async prReview(id: string, number?: number): Promise<Review> {
+    const { workspace, root } = await this.workspace(id);
+    const { result, pr } = await this.knownPr(id, number);
+    const changes = await this.githubReview.changes(root, result.repository, pr.number, pr.headSha);
+    if (changes.headSha !== pr.headSha) this.pullCache.clear();
+    const revision = createHash("sha256").update(JSON.stringify([changes.baseSha, changes.headSha, changes.files])).digest("hex");
+    return { snapshot: { workspace, comparison: "pr", prNumber: pr.number, ref: changes.baseSha, headSha: changes.headSha, repository: result.repository, revision, files: changes.files, totalFiles: changes.totalFiles, capturedAt: new Date().toISOString() }, files: changes.files };
+  }
+  private async contentAt(root: string, ref: string, path: string, repository?: string): Promise<string | null> {
+    if (!isRelativeFile(path)) throw new Error("Invalid file path.");
+    let exists = true;
+    try { await git(root, ["rev-parse", "--verify", `${ref}^{commit}`]); } catch { exists = false; }
+    if (!exists) {
+      if (repository) return this.githubReview.content(root, repository, ref, path);
+      throw new Error("The comparison commit is unavailable on the project host.");
+    }
+    let text: string;
+    try { text = await git(root, ["show", "--no-ext-diff", "--no-textconv", `${ref}:${path}`], MAX_CONTENT); }
+    catch (error) { if ((error as { code?: string }).code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") throw new Error("File is too large or binary for contextual review."); return null; }
+    if (text.includes("\0")) throw new Error("File is too large or binary for contextual review.");
+    return text.replace(/\r\n/g, "\n");
+  }
+  private async workingContent(root: string, path: string): Promise<string | null> {
+    if (!isRelativeFile(path)) throw new Error("Invalid file path.");
+    const absolute = join(root, path);
+    try {
+      if (!isWithin(root, await realpath(dirname(absolute)))) throw new Error("File is outside the workspace.");
+      const stat = await lstat(absolute);
+      if (stat.size > MAX_CONTENT) throw new Error("File is too large or binary for contextual review.");
+      const bytes = stat.isSymbolicLink() ? Buffer.from(await readlink(absolute)) : await readFile(absolute);
+      if (bytes.includes(0)) throw new Error("File is too large or binary for contextual review.");
+      return bytes.toString("utf8").replace(/\r\n/g, "\n");
+    } catch (error) { if ((error as { code?: string }).code === "ENOENT") return null; throw error; }
+  }
+  private async targetContent(id: string, snapshot: Snapshot, path: string, options: ReviewOptions, old = false) {
+    const { root } = await this.workspace(id);
+    if (old) return this.contentAt(root, snapshot.ref, snapshot.files.find((file) => file.path === path)?.oldPath ?? path, snapshot.repository);
+    if (snapshot.comparison !== "pr") return this.workingContent(root, path);
+    const { result, pr } = await this.knownPr(id, options.prNumber);
+    const detail = await this.githubReview.changes(root, result.repository, pr.number, pr.headSha);
+    return this.contentAt(root, snapshot.headSha!, path, detail.headRepository);
+  }
+  private async sinceReview(id: string, comparison: Comparison, options: ReviewOptions): Promise<Review> {
+    const { root } = await this.workspace(id);
+    const baseOptions = { prNumber: options.prNumber };
+    const current = await this.snapshot(id, comparison, baseOptions);
+    const key = `${id}:${comparison}:${options.prNumber ?? ""}:since:${options.since}`;
+    const previous = this.reviews.get(key);
+    if (previous?.revision === current.revision) return previous.promise;
+    const build = async () => {
+      const baseline = await this.checkpoints.load(options.since!, id, root, comparison, options.prNumber);
+      return this.checkpoints.compare(options.since!, baseline, current, (path, previous) => previous ? this.contentAt(root, baseline.ref, path, baseline.repository) : this.targetContent(id, current, path, baseOptions));
+    };
+    const promise = build().catch((error) => { this.reviews.delete(key); throw error; });
+    this.reviews.set(key, { revision: current.revision, promise });
+    if (this.reviews.size > 8) this.reviews.delete(this.reviews.keys().next().value!);
+    return promise;
+  }
+  async checkpoint(id: string, comparison: Comparison, agentId: string, prNumber?: number) {
+    const { root } = await this.workspace(id);
+    const review = await this.review(id, comparison, { prNumber });
+    const point = await this.checkpoints.save(review, root, agentId, prNumber, (path) => this.targetContent(id, review.snapshot, path, { prNumber }));
+    if ((await this.snapshot(id, comparison, { prNumber })).revision !== review.snapshot.revision) throw new Error("Changes moved while saving the review point. Try again.");
+    return point;
+  }
+  async context(input: Extract<BridgeRequest, { op: "context" }>) {
+    const snapshot = await this.snapshot(input.workspaceId, input.comparison, input);
+    if (snapshot.revision !== input.revision) throw new Error("Changes refreshed. Reload the context and try again.");
+    if (!snapshot.files.some((file) => file.path === input.path)) throw new Error("This file is no longer in the changed-file list. Refresh the panel.");
+    let text: string | null;
+    if (input.since && input.side === "old") {
+      const { root } = await this.workspace(input.workspaceId);
+      const baseline = await this.checkpoints.load(input.since, input.workspaceId, root, input.comparison, input.prNumber);
+      if (baseline.omitted.includes(input.path)) throw new Error("This file could not be compared with the review point.");
+      text = Object.hasOwn(baseline.contents, input.path) ? baseline.contents[input.path] : await this.contentAt(root, baseline.ref, input.path, baseline.repository);
+    } else text = await this.targetContent(input.workspaceId, snapshot, input.path, input, input.side === "old");
+    const lines = text ? text.replace(/\n$/, "").split("\n") : [];
+    return { start: input.start, total: lines.length, lines: lines.slice(input.start - 1, input.start - 1 + input.count) };
+  }
+  async discussions(id: string, number: number) {
+    const { root } = await this.workspace(id); const { result, pr } = await this.knownPr(id, number);
+    return this.githubReview.discussions(root, result.repository, pr.number, pr.headSha);
+  }
+  async checkDetail(id: string, number: number, name: string, url: string | null) {
+    const { root } = await this.workspace(id); const { result, pr } = await this.knownPr(id, number);
+    const entry = pr.checks.entries.find((entry) => entry.name === name && entry.url === url);
+    if (!entry) throw new Error("Check is no longer associated with this PR.");
+    return { ...await this.githubReview.check(root, result.repository, pr.headSha, name, url, entry.summary), headSha: pr.headSha };
+  }
   dispatch(input: BridgeRequest): Promise<unknown> {
     if (input.op === "catalog") return this.catalog();
-    if (input.op === "snapshot") return this.snapshot(input.workspaceId, input.comparison);
-    if (input.op === "review") return this.review(input.workspaceId, input.comparison);
+    if (input.op === "snapshot") return this.snapshot(input.workspaceId, input.comparison, input);
+    if (input.op === "review") return this.review(input.workspaceId, input.comparison, input);
     if (input.op === "pull-requests") return this.pullRequests(input.workspaceId);
-    return this.file(input.workspaceId, input.comparison, input.path);
+    if (input.op === "context") return this.context(input);
+    if (input.op === "checkpoint") return this.checkpoint(input.workspaceId, input.comparison, input.agentId, input.prNumber);
+    if (input.op === "threads") return this.discussions(input.workspaceId, input.prNumber);
+    if (input.op === "check-detail") return this.checkDetail(input.workspaceId, input.prNumber, input.name, input.url);
+    return this.file(input.workspaceId, input.comparison, input.path, input);
   }
 }

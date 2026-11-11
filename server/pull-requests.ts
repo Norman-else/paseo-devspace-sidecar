@@ -4,8 +4,8 @@ import { z } from "zod";
 import { checkSummary, type PullRequest, type PullRequestResult } from "../shared/pull-request";
 
 const exec = promisify(execFile);
-type Gh = (root: string, args: string[]) => Promise<string>;
-const runGh: Gh = async (root, args) => (await exec("gh", args, { cwd: root, timeout: 10000, maxBuffer: 2 * 1024 * 1024, encoding: "utf8", env: { ...process.env, GH_PROMPT_DISABLED: "1", GIT_TERMINAL_PROMPT: "0" }, windowsHide: true })).stdout;
+export type Gh = (root: string, args: string[]) => Promise<string>;
+export const runGh: Gh = async (root, args) => (await exec("gh", args, { cwd: root, timeout: 15000, maxBuffer: 8 * 1024 * 1024, encoding: "utf8", env: { ...process.env, GH_PROMPT_DISABLED: "1", GIT_TERMINAL_PROMPT: "0" }, windowsHide: true })).stdout;
 const repoSchema = z.object({ nameWithOwner: z.string(), parent: z.object({ nameWithOwner: z.string() }).nullable().optional() });
 const rawPrSchema = z.object({
   number: z.number().int().positive(), title: z.string(), url: z.string().url(), state: z.enum(["OPEN", "MERGED", "CLOSED"]), isDraft: z.boolean(),

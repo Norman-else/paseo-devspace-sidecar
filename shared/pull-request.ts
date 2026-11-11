@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const checkState = z.enum(["passed", "failed", "pending", "skipped", "unknown"]);
-export const checkSchema = z.object({ name: z.string(), state: checkState, url: z.string().url().nullable() });
+export const checkSchema = z.object({ name: z.string(), state: checkState, url: z.string().url().nullable(), summary: z.string().optional() });
 export const checksSchema = z.object({ status: z.enum(["none", "passed", "failed", "pending", "skipped", "unknown"]), total: z.number().int(), passed: z.number().int(), failed: z.number().int(), pending: z.number().int(), skipped: z.number().int(), unknown: z.number().int(), entries: z.array(checkSchema) });
 export type Checks = z.infer<typeof checksSchema>;
 export const pullRequestSchema = z.object({
@@ -31,7 +31,7 @@ export function checkSummary(value: unknown): Checks {
     }
     summary[state]++; summary.total++;
     const target = item.detailsUrl ?? item.targetUrl;
-    summary.entries.push({ name: String(item.name ?? item.context ?? "Check"), state, url: typeof target === "string" && /^https:\/\//i.test(target) ? target : null });
+    summary.entries.push({ name: String(item.name ?? item.context ?? "Check"), state, url: typeof target === "string" && /^https:\/\//i.test(target) ? target : null, ...(typeof item.description === "string" ? { summary: item.description.slice(0, 8000) } : {}) });
   }
   summary.status = !summary.total ? "none" : summary.failed ? "failed" : summary.pending ? "pending" : summary.unknown ? "unknown" : summary.passed ? "passed" : "skipped";
   return summary;

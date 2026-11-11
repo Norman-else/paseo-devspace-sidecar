@@ -1,9 +1,10 @@
 import { defineRpc } from "@getpaseo/plugin";
 import { z } from "zod";
 import { pullRequestResultSchema } from "./pull-request";
+import { reviewOptions, discussionSchema, checkDetailSchema, contextSchema, checkpointSchema } from "./review-details";
 
 export const workspaceId = z.string().regex(/^ws_[a-zA-Z0-9_-]+$/);
-export const comparison = z.enum(["task", "uncommitted"]);
+export const comparison = z.enum(["task", "uncommitted", "pr", "local"]);
 export const workspaceSchema = z.object({
   id: workspaceId, root: z.string(), sourceRoot: z.string().nullable(), mode: z.string(),
   baseSha: z.string().nullable(), branch: z.string().nullable(), lastUsedAt: z.string(),
@@ -17,6 +18,8 @@ export type ChangedFile = z.infer<typeof fileSchema>;
 export const snapshotSchema = z.object({
   workspace: workspaceSchema, comparison, ref: z.string(), revision: z.string(),
   files: z.array(fileSchema), totalFiles: z.number(), capturedAt: z.string(),
+  headSha: z.string().optional(), repository: z.string().optional(), checkpoint: checkpointSchema.optional(),
+  prNumber: z.number().int().optional(),
 });
 export type Snapshot = z.infer<typeof snapshotSchema>;
 export const fileResultSchema = z.object({ patch: z.string(), notice: z.string().optional() });
@@ -29,20 +32,28 @@ export const catalogRpc = defineRpc({
   output: z.object({ workspace: workspaceSchema.nullable(), inferenceError: z.string().optional() }),
 });
 export const snapshotRpc = defineRpc({
-  name: "diff.snapshot", input: z.object({ workspaceId, comparison }), output: snapshotSchema,
+  name: "diff.snapshot", input: z.object({ workspaceId, comparison, ...reviewOptions }), output: snapshotSchema,
 });
 export const fileRpc = defineRpc({
-  name: "diff.file", input: z.object({ workspaceId, comparison, path: z.string().min(1) }), output: fileResultSchema,
+  name: "diff.file", input: z.object({ workspaceId, comparison, path: z.string().min(1), ...reviewOptions }), output: fileResultSchema,
 });
-export const reviewRpc = defineRpc({ name: "diff.review", input: z.object({ workspaceId, comparison }), output: reviewSchema });
+export const reviewRpc = defineRpc({ name: "diff.review", input: z.object({ workspaceId, comparison, ...reviewOptions }), output: reviewSchema });
 export const pullRequestRpc = defineRpc({ name: "github.pull-requests", input: z.object({ workspaceId }), output: pullRequestResultSchema });
-// The authenticated bridge intentionally exposes only read operations.
+export const threadsRpc = defineRpc({ name: "github.discussions", input: z.object({ workspaceId, prNumber: z.number().int().positive() }), output: discussionSchema });
+export const checkDetailRpc = defineRpc({ name: "github.check-detail", input: z.object({ workspaceId, prNumber: z.number().int().positive(), name: z.string().max(500), url: z.string().url().nullable() }), output: checkDetailSchema });
+export const contextRpc = defineRpc({ name: "diff.context", input: z.object({ workspaceId, comparison, ...reviewOptions, path: z.string().min(1), side: z.enum(["old", "new"]), start: z.number().int().min(1), count: z.number().int().min(1).max(200), revision: z.string() }), output: contextSchema });
+export const checkpointRpc = defineRpc({ name: "diff.checkpoint", input: z.object({ workspaceId, comparison, prNumber: z.number().int().positive().optional(), agentId: z.string().min(1).max(200) }), output: checkpointSchema });
+// Project operations stay read-only; checkpoints write only private sidecar state.
 export const bridgeRequest = z.discriminatedUnion("op", [
   z.object({ op: z.literal("catalog") }),
-  z.object({ op: z.literal("snapshot"), workspaceId, comparison }),
-  z.object({ op: z.literal("review"), workspaceId, comparison }),
+  z.object({ op: z.literal("snapshot"), workspaceId, comparison, ...reviewOptions }),
+  z.object({ op: z.literal("review"), workspaceId, comparison, ...reviewOptions }),
   z.object({ op: z.literal("pull-requests"), workspaceId }),
-  z.object({ op: z.literal("file"), workspaceId, comparison, path: z.string().min(1) }),
+  z.object({ op: z.literal("file"), workspaceId, comparison, path: z.string().min(1), ...reviewOptions }),
+  contextRpc.input.extend({ op: z.literal("context") }),
+  threadsRpc.input.extend({ op: z.literal("threads") }),
+  checkDetailRpc.input.extend({ op: z.literal("check-detail") }),
+  checkpointRpc.input.extend({ op: z.literal("checkpoint") }),
 ]);
 export type BridgeRequest = z.infer<typeof bridgeRequest>;
 

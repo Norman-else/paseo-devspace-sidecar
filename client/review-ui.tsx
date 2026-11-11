@@ -6,7 +6,8 @@ import type { ReviewFile } from "../shared/diff";
 import type { ReviewRow } from "../shared/review";
 import { useMessages } from "./messages";
 import { diffBackground, type CodeAppearance } from "../shared/appearance";
-import { codeScopeProps } from "./web";
+import { codeSelectionProps } from "./web";
+import type { LineSelection } from "../shared/selection";
 
 export type Colors = PluginAgentPanelProps["theme"]["colors"];
 const fileNameTypography = { fontSize: 12, lineHeight: 18, fontWeight: "500" as const };
@@ -59,16 +60,18 @@ export function FileIndex({ files, activePath, reviewed, colors, onJump }: { fil
     </Pressable>}
   />;
 }
-export function CodeLine({ row, colors, typography, onHeight }: { row: Extract<ReviewRow, { kind: "code" }>; colors: Colors; typography: CodeAppearance; onHeight(height: number): void }) {
+export function CodeLine({ row, colors, typography, onHeight, selection, onSelect, match = false, selectionScope = "" }: { row: Extract<ReviewRow, { kind: "code" }>; colors: Colors; typography: CodeAppearance; onHeight(height: number): void; selection?: LineSelection | null; onSelect?(side: "old" | "new", line: number): void; match?: boolean; selectionScope?: string }) {
+  const { t } = useMessages();
   const { fontFamily, fontSize, lineHeight, gutterFontSize, gutterCellWidth, markerWidth } = typography;
   const { line, tokens } = row;
   const add = line.kind === "add", remove = line.kind === "remove";
+  const number = selection?.side === "old" ? line.old : line.next;
+  const selected = selection?.path === row.path && number !== undefined && number >= Math.min(selection.start, selection.end) && number <= Math.max(selection.start, selection.end);
   const tone = add ? colors.statusSuccess : remove ? colors.statusDanger : colors.foregroundMuted;
   const palette = { plain: colors.foreground, comment: colors.foregroundMuted, string: colors.statusSuccess, keyword: colors.accent, number: colors.statusWarning, type: colors.statusWarning, function: colors.accent };
-  return <View {...codeScopeProps} onLayout={(event) => onHeight(event.nativeEvent.layout.height)} style={{ minHeight: lineHeight, flexDirection: "row", alignItems: "flex-start", paddingRight: 8,
-    backgroundColor: add || remove ? diffBackground(tone, colors.surface0) : colors.surface0, borderLeftWidth: 3, borderLeftColor: add || remove ? tone : "transparent" }}>
-    <Text style={{ width: gutterCellWidth, flexShrink: 0, textAlign: "right", paddingRight: 5, lineHeight, color: colors.foregroundMuted, fontFamily, fontSize: gutterFontSize }}>{line.old ?? ""}</Text>
-    <Text style={{ width: gutterCellWidth, flexShrink: 0, textAlign: "right", paddingRight: 6, lineHeight, color: colors.foregroundMuted, fontFamily, fontSize: gutterFontSize }}>{line.next ?? ""}</Text>
+  return <View {...codeSelectionProps(selectionScope, row.path, line.old, line.next)} onLayout={(event) => onHeight(event.nativeEvent.layout.height)} style={{ minHeight: lineHeight, flexDirection: "row", alignItems: "flex-start", paddingRight: 8,
+    backgroundColor: selected ? diffBackground(colors.accent, colors.surface0) : add || remove ? diffBackground(tone, colors.surface0) : colors.surface0, borderLeftWidth: 3, borderLeftColor: selected ? colors.accent : match ? colors.statusWarning : add || remove ? tone : "transparent" }}>
+    {(["old", "new"] as const).map((side) => <Pressable key={side} accessibilityRole="button" accessibilityLabel={t("selectCodeLine", { path: row.path, line: side === "old" ? line.old ?? "" : line.next ?? "", side: t(side === "old" ? "versionOld" : "versionNew") })} disabled={!onSelect || (side === "old" ? line.old : line.next) === undefined} onPress={() => onSelect?.(side, (side === "old" ? line.old : line.next)!)} style={{ width: gutterCellWidth, minHeight: lineHeight, flexShrink: 0 }}><Text style={{ textAlign: "right", paddingRight: 6, lineHeight, color: selected ? colors.foreground : colors.foregroundMuted, fontFamily, fontSize: gutterFontSize }}>{(side === "old" ? line.old : line.next) ?? ""}</Text></Pressable>)}
     <Text style={{ width: markerWidth, flexShrink: 0, lineHeight, color: tone, fontFamily, fontSize }}>{add ? "+" : remove ? "−" : " "}</Text>
     <Text selectable style={[
       { flex: 1, minWidth: 0, fontSize, lineHeight, fontFamily, color: colors.foreground },
