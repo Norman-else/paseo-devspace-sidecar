@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View, type FlatList as NativeFlatList, type ViewToken } from "react-native";
+import { ActivityIndicator, Animated, Pressable, Text, View, type FlatList as NativeFlatList } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRpc, useTabState, type PluginAgentPanelProps } from "@getpaseo/plugin/client";
 import { FlatList, Icon } from "@getpaseo/plugin/client/ui";
@@ -14,6 +14,7 @@ import { useCodeAppearance } from "./use-code-appearance";
 import { PullRequestStatus } from "./pull-request-status";
 import { reviewHeader } from "../shared/review-header";
 import { ReviewToolbar } from "./review-toolbar";
+import { useStickyFileHeader } from "./use-sticky-file-header";
 
 const stateSchema = z.object({ comparison, scope: z.string().default(""), collapsed: z.array(z.string()).default([]), reviewed: z.record(z.string(), z.string()).default({}), indexWidth: z.number().min(140).max(520).nullable().default(null) });
 export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
@@ -64,8 +65,7 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
   const { heights, report } = useRowMeasurements(layoutKey);
   const model = useMemo(() => reviewRows(files, collapsed, textWidth, heights, typography), [files, collapsed, textWidth, heights, typography]);
   const list = useRef<NativeFlatList<ReviewRow>>(null);
-  const viewability = useRef({ itemVisiblePercentThreshold: 10 });
-  const onViewable = useRef(({ viewableItems }: { viewableItems: ViewToken<ReviewRow>[] }) => { if (viewableItems[0]?.item) setActivePath(viewableItems[0].item.path); });
+  const sticky = useStickyFileHeader(model, setActivePath);
   useEffect(() => {
     if (!jump) return;
     const index = model.fileIndices.get(jump);
@@ -125,11 +125,11 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
     {!catalog.isPending && !bound ? <View style={{ padding: 20, gap: 8 }}><Text style={{ color: colors.foreground, fontSize: 13 }}>{t("noAssociation")}</Text><Text style={{ color: colors.foregroundMuted, fontSize: 12, lineHeight: 20 }}>{catalog.data?.inferenceError ? translateBackend(catalog.data.inferenceError) : t("noAssociationHelp")}</Text></View> : null}
     <View style={{ flex: 1, minHeight: 0, flexDirection: "row" }} onLayout={(event) => setSize({ width: event.nativeEvent.layout.width, height: event.nativeEvent.layout.height })}>
       {document.data && bound ? <>
-        <View style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
+        <View style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: "hidden" }}>
             <FlatList<ReviewRow> ref={list} data={model.rows} style={{ flex: 1, width: viewportWidth, height: size.height }} keyExtractor={(row) => row.key}
-              initialNumToRender={55} maxToRenderPerBatch={55} windowSize={9} stickyHeaderIndices={model.headers}
+              initialNumToRender={55} maxToRenderPerBatch={55} windowSize={9}
               getItemLayout={(_, index) => ({ length: model.rows[index]?.height ?? 20, offset: model.offsets[index] ?? 0, index })}
-              onViewableItemsChanged={onViewable.current} viewabilityConfig={viewability.current}
+              onScroll={sticky.onScroll} scrollEventThrottle={16}
               ListEmptyComponent={<Text style={{ color: colors.foregroundMuted, padding: 20, fontSize: 12 }}>{t(search ? "noMatches" : "noChanges")}</Text>}
               renderItem={({ item: row }) => row.kind === "header" ? <FileHeader file={row.file} width={viewportWidth} colors={colors} collapsed={collapsed.has(row.path)} reviewed={!!row.file.hash && reviewed[row.path] === row.file.hash} onToggle={() => toggle(row.path)} onReview={() => mark(row.file)} />
                 : row.kind === "code" ? <CodeLine row={row} colors={colors} typography={typography} onHeight={(height) => report(row.key, height, layoutKey)} />
@@ -142,6 +142,9 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
                   <Text style={{ color: row.deferred ? colors.accent : colors.foregroundMuted, fontSize: 11 }} numberOfLines={2}>{translateBackend(row.text)}</Text>
                 </Pressable>}
             />
+            {sticky.file ? <Animated.View style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, transform: [{ translateY: sticky.translateY }] }} testID="devspace-sticky-file-header">
+              <FileHeader file={sticky.file} width={viewportWidth} colors={colors} collapsed={collapsed.has(sticky.file.path)} reviewed={!!sticky.file.hash && reviewed[sticky.file.path] === sticky.file.hash} onToggle={() => toggle(sticky.file!.path)} onReview={() => mark(sticky.file!)} />
+            </Animated.View> : null}
         </View>
         {wide ? <>
           <ResizeDivider width={indexWidth} min={140} max={maxIndexWidth} colors={colors} onResize={setDragWidth}
