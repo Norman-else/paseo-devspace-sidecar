@@ -44,18 +44,16 @@ function PullRequestSummary({ pr, result, colors }: { pr: PullRequest; result: A
   const checksLabel = checks.status === "passed" ? t("prChecksPassed", { count: checks.passed }) : checks.status === "failed" ? t("prChecksFailed", { count: checks.failed }) : checks.status === "pending" ? t("prChecksPending", { count: checks.pending }) : t(checks.status === "none" ? "prNoChecks" : checks.status === "skipped" ? "prChecksSkipped" : "prChecksUnknown");
   return <>
     <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
-      <View style={{ flex: 1, minWidth: 0, minHeight: 24, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-      <Icon name={pr.state === "MERGED" ? "GitMerge" : "GitPullRequest"} size={16} color={tone} />
-      <Text numberOfLines={1} ellipsizeMode="middle" style={{ flexShrink: 1, minWidth: 0, maxWidth: "30%", color: colors.foregroundMuted, fontSize: 11, lineHeight: 16 }}>{result.repository}</Text>
-      <Text style={{ color: colors.foregroundMuted, fontSize: 11 }}>/</Text>
-      <View style={{ flexShrink: 0 }}><ExternalLink href={pr.url} accessibilityLabel={t("prOpenLink", { number: pr.number })}>
-        <Text style={{ color: colors.foreground, fontSize: 14, fontWeight: "600" }}>PR #{pr.number}</Text>
-      </ExternalLink></View>
-      <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 140, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 5 }}>
-        <Icon name="GitBranch" size={12} color={colors.foregroundMuted} />
+      <View style={{ flex: 1, minWidth: 0, minHeight: 24, flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: 16, rowGap: 4 }}>
+        <View style={{ flexShrink: 1, minWidth: 0, maxWidth: "100%", flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View style={{ flexShrink: 0 }}><ExternalLink href={pr.url} accessibilityLabel={t("prOpenLink", { number: pr.number })}>
+            <Text style={{ color: colors.foreground, fontSize: 13, lineHeight: 20, fontWeight: "600" }}>PR #{pr.number}</Text>
+          </ExternalLink></View>
+          <Text style={{ color: colors.foregroundMuted, fontSize: 13, lineHeight: 20 }}>·</Text>
+          <Text numberOfLines={1} ellipsizeMode="middle" style={{ flexShrink: 1, minWidth: 0, color: colors.foregroundMuted, fontSize: 13, lineHeight: 20 }}>{result.repository}</Text>
+        </View>
         <Text selectable numberOfLines={1} ellipsizeMode="middle" accessibilityLabel={t("prBranchDirection", { source: result.branch, target: pr.baseBranch })}
-          style={{ flex: 1, minWidth: 0, color: colors.foregroundMuted, fontSize: 11, lineHeight: 16 }}>{result.branch} → {pr.baseBranch}</Text>
-      </View>
+          style={{ flexGrow: 1, flexShrink: 1, flexBasis: 170, minWidth: 0, textAlign: "right", color: colors.foregroundMuted, fontSize: 13, lineHeight: 20 }}>{result.branch} → {pr.baseBranch}</Text>
       </View>
       <StatusBadge label={t(stateKey[pr.state])} tone={tone} colors={colors} filled />
     </View>
