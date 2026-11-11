@@ -2,6 +2,7 @@ import { diffLines, type DiffLine, type ReviewFile } from "./diff";
 import { codeTokens, type CodeToken } from "./syntax";
 import { codeAppearance, type CodeAppearance } from "./appearance";
 import type { ReviewThread } from "./review-details";
+import { fileDiscussions } from "./comment-navigation";
 
 export const HEADER_HEIGHT = 36;
 export type ReviewRow =
@@ -10,7 +11,7 @@ export type ReviewRow =
   | { kind: "gap"; omitted: number; label: string; path: string; key: string; height: number; oldStart: number; newStart: number; side: "old" | "new" }
   | { kind: "thread"; thread: ReviewThread; path: string; key: string; height: number }
   | { kind: "notice"; text: string; deferred: boolean; path: string; key: string; height: number };
-export type ReviewExtras = { contexts?: Record<string, { lines: string[]; total: number }>; threads?: ReviewThread[]; anchors?: Record<string, { path: string; side: "old" | "new"; start: number; lines: string[] }> };
+export type ReviewExtras = { contexts?: Record<string, { lines: string[]; total: number }>; threads?: ReviewThread[]; expandedThreads?: ReadonlySet<string>; anchors?: Record<string, { path: string; side: "old" | "new"; start: number; lines: string[] }> };
 export function reviewRows(files: ReviewFile[], collapsed: ReadonlySet<string>, wrapWidth?: number, measured?: ReadonlyMap<string, number>, typography: CodeAppearance = codeAppearance(null), extras: ReviewExtras = {}) {
   const rows: ReviewRow[] = [], offsets: number[] = [], headers: number[] = [];
   const fileIndices = new Map<string, number>();
@@ -23,9 +24,14 @@ export function reviewRows(files: ReviewFile[], collapsed: ReadonlySet<string>, 
     fileIndices.set(file.path, rows.length); headers.push(rows.length);
     add({ kind: "header", file, path: file.path, key: file.path + ":header", height: HEADER_HEIGHT });
     if (collapsed.has(file.path)) continue;
+    const matchingThreads = fileDiscussions(file, extras.threads ?? []);
+    function threadRow(thread: ReviewThread) {
+      add({ kind: "thread", path: file.path, thread, key: `thread:${thread.id}`, height: extras.expandedThreads?.has(thread.id) ? 156 + Math.ceil((thread.comments[0]?.body.length ?? 0) / Math.max(20, (wrapWidth ?? 700) / 7)) * 18 : 36 });
+    }
+    matchingThreads.filter((thread) => thread.line === null).forEach(threadRow);
     if (file.notice || file.deferred) add({ kind: "notice", path: file.path, text: file.notice ?? "Load this file's diff.", deferred: !!file.deferred, key: file.path + ":notice", height: 44 });
     const oldState = { block: false }, newState = { block: false }, shownThreads = new Set<string>();
-    const threads = (extras.threads ?? []).filter((thread) => (thread.path === file.path || thread.side === "LEFT" && thread.path === file.oldPath) && !thread.outdated && thread.line !== null);
+    const threads = matchingThreads.filter((thread) => thread.line !== null);
     let oldEnd = 0, newEnd = 0, serial = 0;
     function code(line: DiffLine, prefix = "") {
       const source = line.text.slice(1).replace(/\t/g, "    ");
@@ -38,7 +44,7 @@ export function reviewRows(files: ReviewFile[], collapsed: ReadonlySet<string>, 
       for (const thread of threads) {
         if (shownThreads.has(thread.id) || (thread.side === "LEFT" ? line.old : line.next) !== thread.line) continue;
         shownThreads.add(thread.id);
-        add({ kind: "thread", path: file.path, thread, key: `thread:${thread.id}`, height: 120 + Math.ceil((thread.comments[0]?.body.length ?? 0) / Math.max(20, (wrapWidth ?? 700) / 7)) * 18 });
+        threadRow(thread);
       }
     }
     function gap(oldStart: number, newStart: number, omitted: number, label: string, tail = false) {

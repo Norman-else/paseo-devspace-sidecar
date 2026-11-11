@@ -6,8 +6,8 @@ import type { Colors } from "./review-ui";
 import { useMessages } from "./messages";
 
 type Available = Extract<PullRequestResult, { status: "available" }>;
-export function PullRequestStatus({ result, loading, error, colors, compact = false, selectedNumber, onSelect, onChecks, onDiscussions, unresolvedCount, expandedDetail }: {
-  result?: PullRequestResult; loading: boolean; error: Error | null; colors: Colors; compact?: boolean; selectedNumber?: number; onSelect?(number: number): void; onChecks?(): void; onDiscussions?(): void; unresolvedCount?: number; expandedDetail?: "checks" | "comments" | null;
+export function PullRequestStatus({ result, loading, error, colors, compact = false, selectedNumber, onSelect, onChecks, expandedDetail }: {
+  result?: PullRequestResult; loading: boolean; error: Error | null; colors: Colors; compact?: boolean; selectedNumber?: number; onSelect?(number: number): void; onChecks?(): void; expandedDetail?: "checks" | null;
 }) {
   const { t } = useMessages();
   const note = { paddingHorizontal: 12, paddingVertical: 10, gap: 8, flexDirection: "row" as const, alignItems: "center" as const, borderBottomWidth: 1, borderColor: colors.border };
@@ -28,11 +28,11 @@ export function PullRequestStatus({ result, loading, error, colors, compact = fa
         <Text style={{ fontSize: 11, color: active.number === pr.number ? colors.foreground : colors.foregroundMuted }}>#{pr.number} → {pr.baseBranch}</Text>
       </Pressable>)}
     </ScrollView> : null}
-    <PullRequestSummary key={active.number} pr={active} result={result} colors={colors} compact={compact} onChecks={onChecks} onDiscussions={onDiscussions} unresolvedCount={unresolvedCount} expandedDetail={expandedDetail} />
+    <PullRequestSummary key={active.number} pr={active} result={result} colors={colors} compact={compact} onChecks={onChecks} expandedDetail={expandedDetail} />
   </View>;
 }
 
-function PullRequestSummary({ pr, result, colors, compact, onChecks, onDiscussions, unresolvedCount, expandedDetail }: { pr: PullRequest; result: Available; colors: Colors; compact: boolean; onChecks?(): void; onDiscussions?(): void; unresolvedCount?: number; expandedDetail?: "checks" | "comments" | null }) {
+function PullRequestSummary({ pr, result, colors, compact, onChecks, expandedDetail }: { pr: PullRequest; result: Available; colors: Colors; compact: boolean; onChecks?(): void; expandedDetail?: "checks" | null }) {
   const { t } = useMessages();
   const stateKey = { OPEN: "prOpen", DRAFT: "prDraft", MERGED: "prMerged", CLOSED: "prClosed" } as const;
   const tone = pr.state === "OPEN" ? colors.statusSuccess : pr.state === "CLOSED" ? colors.statusDanger : pr.state === "MERGED" ? colors.accent : colors.foregroundMuted;
@@ -62,9 +62,9 @@ function PullRequestSummary({ pr, result, colors, compact, onChecks, onDiscussio
         tone={checkTone} colors={colors} expanded={expandedDetail === "checks"} onPress={checks.total ? onChecks : undefined} accessibilityLabel={t("prToggleChecks")} />
       {checks.skipped > 0 && checks.status !== "skipped" ? <StatusBadge label={t("prSkippedCount", { count: checks.skipped })} tone={colors.foregroundMuted} colors={colors} /> : null}
       {pr.review !== "NONE" ? <StatusBadge
-        label={t(({ APPROVED: "prApproved", CHANGES_REQUESTED: "prChangesRequested", REVIEW_REQUIRED: "prReviewRequired" } as const)[pr.review]) + (unresolvedCount ? ` · ${unresolvedCount}` : "")}
+        label={t(({ APPROVED: "prApproved", CHANGES_REQUESTED: "prChangesRequested", REVIEW_REQUIRED: "prReviewRequired" } as const)[pr.review])}
         icon={pr.review === "APPROVED" ? "CheckCheck" : "MessageSquare"}
-        tone={pr.review === "APPROVED" ? colors.statusSuccess : pr.review === "CHANGES_REQUESTED" ? colors.statusDanger : colors.statusWarning} colors={colors} expanded={expandedDetail === "comments"} accessibilityLabel={t("discussions")} onPress={onDiscussions} /> : <StatusBadge label={t("discussions") + (unresolvedCount ? ` · ${unresolvedCount}` : "")} tone={colors.foregroundMuted} colors={colors} expanded={expandedDetail === "comments"} accessibilityLabel={t("discussions")} onPress={onDiscussions} />}
+        tone={pr.review === "APPROVED" ? colors.statusSuccess : pr.review === "CHANGES_REQUESTED" ? colors.statusDanger : colors.statusWarning} colors={colors} /> : null}
       {pr.conflicts && pr.state === "OPEN" ? <StatusBadge label={t("prConflicts")} icon="CircleAlert" tone={colors.statusDanger} colors={colors} /> : null}
     </View>
 

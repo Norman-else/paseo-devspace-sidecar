@@ -70,7 +70,7 @@ export class GitHubReview {
     const threads: import("../shared/review-details").ReviewThread[] = [];
     let cursor: string | null = null, truncated = false;
     for (let page = 0; page < 10; page++) {
-      const query = `query($owner:String!,$name:String!,$number:Int!,$cursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){headRefOid reviewThreads(first:100,after:$cursor){pageInfo{hasNextPage endCursor} nodes{id path line startLine diffSide isResolved isOutdated comments(first:100){pageInfo{hasNextPage} nodes{author{login} body url createdAt}}}}}}}`;
+      const query = `query($owner:String!,$name:String!,$number:Int!,$cursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){headRefOid reviewThreads(first:100,after:$cursor){pageInfo{hasNextPage endCursor} nodes{id path line startLine diffSide isResolved isOutdated comments(first:100){pageInfo{hasNextPage} nodes{author{login avatarUrl url ... on User{name}} body url createdAt}}}}}}}`;
       const args = ["api", "graphql", "-f", `query=${query}`, "-f", `owner=${owner}`, "-f", `name=${name}`, "-F", `number=${number}`, ...(cursor ? ["-f", `cursor=${cursor}`] : [])];
       const data = JSON.parse(await this.gh(root, args));
       if (data.errors?.length) throw new Error("Unable to read PR discussions.");
@@ -78,7 +78,7 @@ export class GitHubReview {
       if (!pr || pr.headRefOid !== headSha) throw new Error("PR changed while loading. Refresh and try again.");
       const collection = pr.reviewThreads;
       for (const thread of collection.nodes) threads.push({ id: thread.id, path: thread.path, line: thread.line, startLine: thread.startLine, side: thread.diffSide, resolved: thread.isResolved, outdated: thread.isOutdated, truncated: !!thread.comments.pageInfo.hasNextPage,
-        comments: thread.comments.nodes.map((comment: { author?: { login: string }; body: string; url: string; createdAt: string }) => ({ author: comment.author?.login ?? "GitHub", body: comment.body.slice(0, 24000), url: comment.url, createdAt: comment.createdAt })) });
+        comments: thread.comments.nodes.map((comment: { author?: { login: string; name?: string | null; avatarUrl?: string; url?: string }; body: string; url: string; createdAt: string }) => ({ author: comment.author?.login ?? "GitHub", name: comment.author?.name ?? null, avatarUrl: comment.author?.avatarUrl ?? null, authorUrl: comment.author?.url ?? null, body: comment.body.slice(0, 24000), url: comment.url, createdAt: comment.createdAt })) });
       truncated = collection.pageInfo.hasNextPage;
       if (!truncated) break;
       cursor = collection.pageInfo.endCursor;

@@ -27,8 +27,9 @@ export function Stats({ file, colors }: { file: ReviewFile; colors: Colors }) {
     {file.status === "?" ? <Text style={{ color: colors.statusSuccess, fontSize }}>{t("newFile")}</Text> : null}
   </View>;
 }
-export function FileHeader({ file, width, colors, collapsed, reviewed, onToggle, onReview }: {
+export function FileHeader({ file, width, colors, collapsed, reviewed, onToggle, onReview, commentCount = 0, onComments }: {
   file: ReviewFile; width: number; colors: Colors; collapsed: boolean; reviewed: boolean; onToggle(): void; onReview(): void;
+  commentCount?: number; onComments?(): void;
 }) {
   const { t } = useMessages();
   const parts = file.path.split("/"); const name = parts.pop();
@@ -41,6 +42,7 @@ export function FileHeader({ file, width, colors, collapsed, reviewed, onToggle,
       <Text numberOfLines={1} ellipsizeMode="middle" style={{ color: colors.foregroundMuted, fontSize: 10, flex: 1, minWidth: 0 }}>{parts.join("/")}</Text>
     </Pressable>
     <Stats file={file} colors={colors} />
+    {commentCount > 0 && onComments ? <Pressable accessibilityRole="button" accessibilityLabel={t("fileComments", { path: file.path })} onPress={onComments} style={{ minHeight: 34, paddingHorizontal: 7, flexDirection: "row", alignItems: "center", gap: 4 }}><Icon name="MessageSquare" size={12} color={colors.foregroundMuted} /><Text style={{ color: colors.foregroundMuted, fontSize: 11 }}>{commentCount}</Text></Pressable> : null}
     <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: reviewed }} accessibilityLabel={t(reviewed ? "clearReviewed" : "markReviewed", { path: file.path })} onPress={onReview}
       style={{ width: 28, height: 28, alignItems: "center", justifyContent: "center", marginLeft: 4 }}>
       <Icon name={reviewed ? "CircleCheck" : "Circle"} size={14} color={reviewed ? colors.statusSuccess : colors.foregroundMuted} />

@@ -30,7 +30,7 @@ async function fixture() {
     if (args[0] === "pr") return JSON.stringify([rawPr]);
     if (args[0] === "run") return "\u001b[31mERROR: test failed\u001b[0m\nexpected 2, got 3\n";
     const endpoint = args[1];
-    if (endpoint === "graphql") return JSON.stringify({ data: { repository: { pullRequest: { headRefOid: head, reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{ id: "thread1", path: "code.txt", line: 20, startLine: null, diffSide: "RIGHT", isResolved: false, isOutdated: false, comments: { pageInfo: { hasNextPage: false }, nodes: [{ author: { login: "reviewer" }, body: "Please check this", url: "https://github.com/Example/repo/pull/7#discussion_r1", createdAt: "2026-01-01" }] } }] } } } } });
+    if (endpoint === "graphql") return JSON.stringify({ data: { repository: { pullRequest: { headRefOid: head, reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{ id: "thread1", path: "code.txt", line: 20, startLine: null, diffSide: "RIGHT", isResolved: false, isOutdated: false, comments: { pageInfo: { hasNextPage: false }, nodes: [{ author: { login: "reviewer", name: "Reviewer Name", avatarUrl: "https://avatars.githubusercontent.com/u/1?v=4", url: "https://github.com/reviewer" }, body: "Please check this", url: "https://github.com/Example/repo/pull/7#discussion_r1", createdAt: "2026-01-01" }] } }] } } } } });
     if (endpoint.includes("/files?")) return JSON.stringify([{ filename: "code.txt", status: "modified", additions: 1, deletions: 1, patch }]);
     if (endpoint.includes("/compare/")) return JSON.stringify({ merge_base_commit: { sha: base } });
     if (endpoint.endsWith("/pulls/7")) return JSON.stringify({ base: { sha: base }, head: { sha: head, repo: { full_name: "Example/repo" } }, changed_files: 1 });
@@ -79,7 +79,7 @@ test("review points compare later edits, new files and restored files without ed
 });
 test("discussions keep line sides and check details include failure context with safe, read-only gh calls", async () => {
   const f = await fixture(); try {
-    const discussions = await f.service.discussions("ws_test", 7); assert.equal(discussions.headSha, f.head); assert.equal(discussions.threads[0].side, "RIGHT"); assert.equal(discussions.threads[0].line, 20);
+    const discussions = await f.service.discussions("ws_test", 7); assert.equal(discussions.headSha, f.head); assert.equal(discussions.threads[0].side, "RIGHT"); assert.equal(discussions.threads[0].line, 20); assert.equal(discussions.threads[0].comments[0].name, "Reviewer Name"); assert.ok(discussions.threads[0].comments[0].avatarUrl?.startsWith("https://avatars.githubusercontent.com/")); assert.equal(discussions.threads[0].comments[0].authorUrl, "https://github.com/reviewer");
     const url = "https://github.com/Example/repo/actions/runs/10/job/20";
     const detail = await f.service.checkDetail("ws_test", 7, "build", url); assert.match(detail.summary, /Tests failed/); assert.match(detail.excerpt, /expected 2/); assert.ok(!detail.excerpt.includes("\u001b"));
     await assert.rejects(f.service.checkDetail("ws_test", 7, "unknown", url), /associated/);

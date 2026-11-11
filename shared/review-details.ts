@@ -1,7 +1,7 @@
 import { z } from "zod";
 export const reviewOptions = { prNumber: z.number().int().positive().optional(), since: z.string().regex(/^[a-f0-9]{64}$/).optional() };
 export type ReviewOptions = { prNumber?: number; since?: string };
-export const threadSchema = z.object({ id: z.string(), path: z.string(), line: z.number().int().nullable(), startLine: z.number().int().nullable(), side: z.enum(["LEFT", "RIGHT"]), resolved: z.boolean(), outdated: z.boolean(), comments: z.array(z.object({ author: z.string(), body: z.string(), url: z.string().url(), createdAt: z.string() })), truncated: z.boolean() });
+export const threadSchema = z.object({ id: z.string(), path: z.string(), line: z.number().int().nullable(), startLine: z.number().int().nullable(), side: z.enum(["LEFT", "RIGHT"]), resolved: z.boolean(), outdated: z.boolean(), comments: z.array(z.object({ author: z.string(), name: z.string().nullable().optional(), avatarUrl: z.string().url().nullable().optional(), authorUrl: z.string().url().nullable().optional(), body: z.string(), url: z.string().url(), createdAt: z.string() })), truncated: z.boolean() });
 export type ReviewThread = z.infer<typeof threadSchema>;
 export const discussionSchema = z.object({ headSha: z.string(), threads: z.array(threadSchema), truncated: z.boolean() });
 export const checkDetailSchema = z.object({ name: z.string(), url: z.string().url().nullable(), summary: z.string(), excerpt: z.string(), logUnavailable: z.boolean(), external: z.boolean(), headSha: z.string().optional() });
