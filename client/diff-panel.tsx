@@ -190,7 +190,11 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
     {view === "changes" && error ? <Text selectable style={{ color: colors.statusDanger, padding: 12, fontSize: 12 }}>{translateBackend(error.message)}</Text> : null}
     {view === "changes" && (catalog.isPending || (bound && !document.data && (snapshot.isPending || document.isPending))) ? <ActivityIndicator color={colors.foregroundMuted} style={{ margin: 20 }} /> : null}
     {!catalog.isPending && !bound ? <View style={{ padding: 20, gap: 8 }}><Text style={{ color: colors.foreground, fontSize: 13 }}>{t("noAssociation")}</Text><Text style={{ color: colors.foregroundMuted, fontSize: 12, lineHeight: 20 }}>{catalog.data?.inferenceError ? translateBackend(catalog.data.inferenceError) : t("noAssociationHelp")}</Text></View> : null}
-    <View style={{ flex: 1, minHeight: 0, flexDirection: "row", display: view === "changes" ? "flex" : "none" }} onLayout={(event) => { if (view === "changes" && event.nativeEvent.layout.height > 0) setSize((previous) => ({ ...previous, height: event.nativeEvent.layout.height })); }}>
+    <View style={{ flex: 1, minHeight: 0, flexDirection: "row", display: view === "changes" ? "flex" : "none" }} onLayout={(event) => {
+      // Native synthetic events can be recycled before React runs this updater.
+      const height = event.nativeEvent.layout.height;
+      if (view === "changes" && height > 0) setSize((previous) => previous.height === height ? previous : { ...previous, height });
+    }}>
       {document.data && bound ? <>
         <View style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: "hidden" }}>
           <FlatList<ReviewRow> ref={list} data={model.rows} style={{ flex: 1, width: viewportWidth, height: size.height }} keyExtractor={(row) => row.key} initialNumToRender={55} maxToRenderPerBatch={55} windowSize={9}
