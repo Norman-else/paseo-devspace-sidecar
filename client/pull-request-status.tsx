@@ -51,20 +51,20 @@ function PullRequestCard({ pr, result, refreshing, colors, onRefresh }: { pr: Pu
     <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
       <Icon name={pr.state === "MERGED" ? "GitMerge" : "GitPullRequest"} size={18} color={tone} />
       <Text style={{ color: colors.foregroundMuted, fontSize: 11 }}>{t("prSection")}</Text>
-      <View style={{ flex: 1, minWidth: 0 }}><ExternalLink href={pr.url} accessibilityLabel={t("prOpenLink", { number: pr.number })}>
+      <View style={{ flexShrink: 0 }}><ExternalLink href={pr.url} accessibilityLabel={t("prOpenLink", { number: pr.number })}>
         <Text style={{ color: colors.foreground, fontSize: 14, fontWeight: "700" }}>#{pr.number}</Text>
       </ExternalLink></View>
+      <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 5, paddingLeft: 8 }}>
+        <Icon name="GitBranch" size={12} color={colors.foregroundMuted} />
+        <Text selectable numberOfLines={1} ellipsizeMode="middle" accessibilityLabel={t("prBranchDirection", { source: result.branch, target: pr.baseBranch })}
+          style={{ flex: 1, minWidth: 0, color: colors.foregroundMuted, fontSize: 11, lineHeight: 16 }}>{result.branch} → {pr.baseBranch}</Text>
+      </View>
       <StatusBadge label={t(stateKey[pr.state])} tone={tone} colors={colors} />
       {refreshing ? <View style={{ width: 28, height: 28, justifyContent: "center" }}><ActivityIndicator size="small" color={colors.foregroundMuted} /></View> : <ToolButton icon="RefreshCw" label={t("prRefresh")} colors={colors} onPress={onRefresh} />}
     </View>
     <ExternalLink href={pr.url} accessibilityLabel={t("prOpenLink", { number: pr.number })}>
       <Text numberOfLines={2} style={{ color: colors.foreground, fontSize: 13, fontWeight: "500", lineHeight: 19 }}>{pr.title}</Text>
     </ExternalLink>
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-      <Icon name="GitBranch" size={12} color={colors.foregroundMuted} />
-      <Text selectable numberOfLines={1} accessibilityLabel={t("prBranchDirection", { source: result.branch, target: pr.baseBranch })}
-        style={{ flex: 1, minWidth: 0, color: colors.foreground, fontSize: 11, lineHeight: 16 }}>{result.branch} → {pr.baseBranch}</Text>
-    </View>
     <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
       <StatusBadge label={checksLabel} icon={checks.status === "passed" ? "CircleCheck" : checks.status === "failed" ? "CircleX" : "CircleDot"}
         tone={checkTone} colors={colors} expanded={expanded} onPress={checks.total ? () => setExpanded(!expanded) : undefined} accessibilityLabel={t("prToggleChecks")} />
