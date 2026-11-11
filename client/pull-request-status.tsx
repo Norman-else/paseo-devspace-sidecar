@@ -67,7 +67,14 @@ function PullRequestCard({ pr, result, refreshing, colors, onRefresh }: { pr: Pu
       {pr.conflicts && pr.state === "OPEN" ? <StatusBadge label={t("prConflicts")} icon="CircleAlert" tone={colors.statusDanger} colors={colors} /> : null}
     </View>
     <View style={{ flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "space-between", flexWrap: "wrap" }}>
-      <Text numberOfLines={1} style={{ flexShrink: 1, color: colors.foregroundMuted, fontSize: 10, lineHeight: 16 }}>{result.repository} → {pr.baseBranch}</Text>
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <Text numberOfLines={1} style={{ color: colors.foregroundMuted, fontSize: 10, lineHeight: 16 }}>{result.repository}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+          <Icon name="GitBranch" size={12} color={colors.foregroundMuted} />
+          <Text selectable numberOfLines={1} accessibilityLabel={t("prBranchDirection", { source: result.branch, target: pr.baseBranch })}
+            style={{ flex: 1, minWidth: 0, color: colors.foreground, fontSize: 11, lineHeight: 16 }}>{result.branch} → {pr.baseBranch}</Text>
+        </View>
+      </View>
       <ExternalLink href={pr.url}><Text style={{ color: colors.accent, fontSize: 11, lineHeight: 16 }}>{t("prOpenOnGitHub")} ↗</Text></ExternalLink>
     </View>
     {expanded && checks.entries.length ? <View style={{ gap: 8, paddingTop: 10, borderTopWidth: 1, borderColor: colors.border }}>

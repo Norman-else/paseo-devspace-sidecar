@@ -24,6 +24,7 @@ export const en = {
   prSection: "Pull request", prRefresh: "Refresh PR status", prOpenOnGitHub: "Open on GitHub", prSelect: "Select PR #{{number}}",
   prSkippedCount_one: "{{count}} skipped", prSkippedCount_other: "{{count}} skipped",
   prCheckPassed: "Passed", prCheckFailed: "Failed", prCheckPending: "Pending", prCheckSkipped: "Skipped", prCheckUnknown: "Unknown",
+  prBranchDirection: "Merge {{source}} into {{target}}",
 } as const;
 
 export const zh: Record<keyof typeof en, string> = {
@@ -52,6 +53,7 @@ export const zh: Record<keyof typeof en, string> = {
   prSection: "合并请求", prRefresh: "刷新 PR 状态", prOpenOnGitHub: "在 GitHub 打开", prSelect: "选择 PR #{{number}}",
   prSkippedCount_one: "{{count}} 项跳过", prSkippedCount_other: "{{count}} 项跳过",
   prCheckPassed: "通过", prCheckFailed: "失败", prCheckPending: "进行中", prCheckSkipped: "已跳过", prCheckUnknown: "未知",
+  prBranchDirection: "从 {{source}} 合并到 {{target}}",
 };
 
 export const backendMessages = {
