@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { checkSummary, pullRequestResultSchema } from "../shared/pull-request.ts";
 import { githubRepository, PullRequests } from "../server/pull-requests.ts";
+import { reviewHeader } from "../shared/review-header.ts";
 
 const input = { root: "/registered/worktree", remote: "git@github.com:Owner/Repo.git", branch: "feature/task", localHeadSha: "local-head" };
 const pr = (overrides: object = {}) => ({ number: 123, title: "Task changes", url: "https://github.com/Owner/Repo/pull/123", state: "OPEN", isDraft: false,
@@ -79,4 +80,18 @@ test("missing PRs, absent CLI and failed authentication remain distinct results"
   const network = await new PullRequests(async () => { throw new Error("network unreachable"); }).read(input);
   assert.deepEqual(network.status === "unavailable" && network.reason, "request_failed");
   assert.equal((await reader([]).read({ ...input, branch: null })).status, "unavailable");
+});
+
+test("Review uses exactly one context header for PR, no-PR, loading and failure states", async () => {
+  const available = await reader([pr()]).read(input);
+  const none = await reader([]).read(input);
+  assert.deepEqual(reviewHeader({ hasWorkspace: true, result: available, pending: false, error: false }), { mode: "pull-request", showPrNotice: false });
+  assert.deepEqual(reviewHeader({ hasWorkspace: true, result: none, pending: false, error: false }), { mode: "workspace", showPrNotice: false });
+  assert.deepEqual(reviewHeader({ hasWorkspace: true, pending: true, error: false }), { mode: "workspace", showPrNotice: true });
+  assert.deepEqual(reviewHeader({ hasWorkspace: true, result: available, pending: false, error: true }), { mode: "workspace", showPrNotice: true });
+  const failed = { status: "unavailable", reason: "auth_required", checkedAt: new Date().toISOString() } as const;
+  assert.deepEqual(reviewHeader({ hasWorkspace: true, result: failed, pending: false, error: false }), { mode: "workspace", showPrNotice: true });
+  assert.deepEqual(reviewHeader({ hasWorkspace: false, result: available, pending: true, error: false }), { mode: "none", showPrNotice: false });
+  const merged = await reader([pr({ state: "MERGED" })]).read(input);
+  assert.equal(reviewHeader({ hasWorkspace: true, result: merged, pending: false, error: false }).mode, "pull-request");
 });

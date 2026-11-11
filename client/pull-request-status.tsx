@@ -1,14 +1,14 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { ExternalLink, Icon, ScrollView } from "@getpaseo/plugin/client/ui";
 import type { PullRequest, PullRequestResult } from "../shared/pull-request";
 import { diffBackground } from "../shared/appearance";
-import { ToolButton, type Colors } from "./review-ui";
+import type { Colors } from "./review-ui";
 import { useMessages } from "./messages";
 
 type Available = Extract<PullRequestResult, { status: "available" }>;
-export function PullRequestStatus({ result, loading, refreshing, error, colors, onRefresh }: {
-  result?: PullRequestResult; loading: boolean; refreshing: boolean; error: Error | null; colors: Colors; onRefresh(): void;
+export function PullRequestStatus({ result, loading, error, colors, children }: {
+  result?: PullRequestResult; loading: boolean; error: Error | null; colors: Colors; children?: ReactNode;
 }) {
   const { t } = useMessages();
   const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
@@ -17,10 +17,10 @@ export function PullRequestStatus({ result, loading, refreshing, error, colors, 
   if (!result && loading) return <View style={note}><ActivityIndicator size="small" color={colors.foregroundMuted} /><Text style={muted}>{t("prLoading")}</Text></View>;
   if (error || result?.status === "unavailable") {
     const labels = { gh_missing: "prGhMissing", auth_required: "prAuthRequired", unsupported_remote: "prUnsupported", no_remote: "prNoRemote", detached_head: "prDetached", request_failed: "prUnavailable" } as const;
-    return <View style={note}><Icon name="CircleAlert" size={15} color={colors.statusWarning} /><Text style={muted}>{t(result?.status === "unavailable" ? labels[result.reason] : "prUnavailable")}</Text><ToolButton icon="RefreshCw" label={t("prRefresh")} colors={colors} onPress={onRefresh} /></View>;
+    return <View style={note}><Icon name="CircleAlert" size={15} color={colors.statusWarning} /><Text style={muted}>{t(result?.status === "unavailable" ? labels[result.reason] : "prUnavailable")}</Text></View>;
   }
   if (!result) return null;
-  if (result.status === "none") return <View style={note}><Icon name="GitPullRequest" size={15} color={colors.foregroundMuted} /><Text style={muted}>{t("prNone")}</Text></View>;
+  if (result.status === "none") return null;
   const active = result.pullRequests.find((pr) => pr.number === selectedNumber) ?? result.pullRequests[0];
   if (!active) return null;
   const needsAttention = active.checks.failed > 0 || active.review === "CHANGES_REQUESTED" || (active.state === "OPEN" && active.conflicts);
@@ -31,11 +31,12 @@ export function PullRequestStatus({ result, loading, refreshing, error, colors, 
         <Text style={{ fontSize: 11, color: active.number === pr.number ? colors.foreground : colors.foregroundMuted }}>#{pr.number} → {pr.baseBranch}</Text>
       </Pressable>)}
     </ScrollView> : null}
-    <PullRequestCard key={active.number} pr={active} result={result} refreshing={refreshing} colors={colors} onRefresh={onRefresh} />
+    <PullRequestCard key={active.number} pr={active} result={result} colors={colors} />
+    {children ? <View style={{ borderTopWidth: 1, borderColor: colors.border, paddingTop: 10 }}>{children}</View> : null}
   </View>;
 }
 
-function PullRequestCard({ pr, result, refreshing, colors, onRefresh }: { pr: PullRequest; result: Available; refreshing: boolean; colors: Colors; onRefresh(): void }) {
+function PullRequestCard({ pr, result, colors }: { pr: PullRequest; result: Available; colors: Colors }) {
   const { t } = useMessages();
   const [expanded, setExpanded] = useState(false);
   const stateKey = { OPEN: "prOpen", DRAFT: "prDraft", MERGED: "prMerged", CLOSED: "prClosed" } as const;
@@ -60,7 +61,6 @@ function PullRequestCard({ pr, result, refreshing, colors, onRefresh }: { pr: Pu
           style={{ flex: 1, minWidth: 0, color: colors.foregroundMuted, fontSize: 11, lineHeight: 16 }}>{result.branch} → {pr.baseBranch}</Text>
       </View>
       <StatusBadge label={t(stateKey[pr.state])} tone={tone} colors={colors} />
-      {refreshing ? <View style={{ width: 28, height: 28, justifyContent: "center" }}><ActivityIndicator size="small" color={colors.foregroundMuted} /></View> : <ToolButton icon="RefreshCw" label={t("prRefresh")} colors={colors} onPress={onRefresh} />}
     </View>
     <ExternalLink href={pr.url} accessibilityLabel={t("prOpenLink", { number: pr.number })}>
       <Text numberOfLines={2} style={{ color: colors.foreground, fontSize: 13, fontWeight: "500", lineHeight: 19 }}>{pr.title}</Text>
