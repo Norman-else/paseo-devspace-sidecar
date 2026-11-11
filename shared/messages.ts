@@ -1,8 +1,8 @@
 export const en = {
-  codeReview: "Code review", openReview: "Open DevSpace Diff", commandDescription: "Review live DevSpace changes in the right sidebar",
+  codeReview: "Review", openReview: "View code changes and PR status", commandDescription: "View DevSpace changes and pull request status in the right sidebar",
   taskChanges: "Task changes", uncommitted: "Uncommitted", files_one: "{{count}} file", files_other: "{{count}} files", reviewedCount: " · {{count}} reviewed",
   filterFiles: "Filter files", filterPlaceholder: "Filter files…", expandAll: "Expand all files", collapseAll: "Collapse all files",
-  openIndex: "Open file index", closeIndex: "Close file index", changedFiles: "Changed files", refresh: "Refresh DevSpace diff",
+  openIndex: "Open file index", closeIndex: "Close file index", changedFiles: "Changed files", refresh: "Refresh review",
   noAssociation: "No DevSpace workspace for this session", noAssociationHelp: "Open this panel in a task that uses DevSpace. Its changes will appear automatically.",
   noMatches: "No matching files", noChanges: "No file changes in this comparison", unchangedLines: "{{count}} unchanged lines", context: "Context",
   loadFile: "Load this file's diff", loadFileLabel: "Load diff for {{path}}", newFile: "New", expandFile: "Expand {{path}}", collapseFile: "Collapse {{path}}",
@@ -14,13 +14,20 @@ export const en = {
   newTooLarge: "New file exceeds the 512 KiB text preview limit.", patchTooLarge: "Diff exceeds the 768 KiB preview limit.", newEmpty: "New empty file.",
   noDifference: "No text difference remains. Refresh the file list.", offline: "Cannot reach the project host's diff bridge. Check its Paseo plugin and private tunnel.",
   noBase: "This workspace has no task starting commit. Choose Uncommitted instead.", changedFileMissing: "This file is no longer in the changed-file list. Refresh the panel.",
+  prOpen: "Open", prDraft: "Draft", prMerged: "Merged", prClosed: "Closed", prOpenLink: "Open PR #{{number}} on GitHub",
+  prLoading: "Loading PR status…", prUnavailable: "PR status is unavailable. Refresh to retry.", prNone: "No PR for this branch",
+  prGhMissing: "Install GitHub CLI on the project host to show PR status.", prAuthRequired: "Check GitHub CLI sign-in and repository access on the project host.",
+  prUnsupported: "PR status currently supports GitHub remotes.", prNoRemote: "No Git remote is configured for PR lookup.", prDetached: "Switch to a branch to show its PR status.",
+  prChecksPassed_one: "{{count}} check passed", prChecksPassed_other: "{{count}} checks passed", prChecksFailed_one: "{{count}} check failed", prChecksFailed_other: "{{count}} checks failed", prChecksPending_one: "{{count}} check pending", prChecksPending_other: "{{count}} checks pending", prNoChecks: "No checks", prChecksSkipped: "Checks skipped", prChecksUnknown: "Checks unknown",
+  prApproved: "Approved", prChangesRequested: "Changes requested", prReviewRequired: "Review required", prConflicts: "Merge conflicts", prToggleChecks: "Show or hide PR checks",
+  prLastPush: "Checks apply to the last push", prHeadDiffers: "PR head differs from this checkout",
 } as const;
 
 export const zh: Record<keyof typeof en, string> = {
-  codeReview: "代码审阅", openReview: "打开 DevSpace Diff", commandDescription: "在右侧审阅 DevSpace 的实时文件改动",
+  codeReview: "审阅", openReview: "查看代码改动与 PR 状态", commandDescription: "在右侧查看 DevSpace 代码改动与 PR 状态",
   taskChanges: "任务改动", uncommitted: "未提交", files_one: "{{count}} 个文件", files_other: "{{count}} 个文件", reviewedCount: " · 已查看 {{count}}",
   filterFiles: "筛选文件", filterPlaceholder: "筛选文件…", expandAll: "展开所有文件", collapseAll: "折叠所有文件",
-  openIndex: "打开文件索引", closeIndex: "关闭文件索引", changedFiles: "变更文件", refresh: "刷新 DevSpace diff",
+  openIndex: "打开文件索引", closeIndex: "关闭文件索引", changedFiles: "变更文件", refresh: "刷新审阅",
   noAssociation: "当前会话未关联 DevSpace", noAssociationHelp: "在使用 DevSpace 修改代码的任务会话中打开，改动会自动显示。",
   noMatches: "没有匹配的文件", noChanges: "这个范围内没有文件改动", unchangedLines: "{{count}} 行未改动", context: "上下文",
   loadFile: "点击加载此文件差异", loadFileLabel: "加载差异 {{path}}", newFile: "新建", expandFile: "展开文件 {{path}}", collapseFile: "折叠文件 {{path}}",
@@ -32,6 +39,13 @@ export const zh: Record<keyof typeof en, string> = {
   newTooLarge: "新文件超过 512 KiB 的文本预览限制。", patchTooLarge: "差异超过 768 KiB 的预览限制。", newEmpty: "新增空文件。",
   noDifference: "此文件已没有文本差异，请刷新文件列表。", offline: "无法连接项目主机的差异服务，请检查该主机上的 Paseo 插件和私有隧道。",
   noBase: "此工作区没有任务起点提交，请切换到未提交视图。", changedFileMissing: "此文件已不在变更列表中，请刷新面板。",
+  prOpen: "已打开", prDraft: "草稿", prMerged: "已合并", prClosed: "已关闭", prOpenLink: "在 GitHub 打开 PR #{{number}}",
+  prLoading: "正在读取 PR 状态…", prUnavailable: "暂时无法读取 PR 状态，请刷新重试。", prNone: "当前分支没有对应 PR",
+  prGhMissing: "在项目主机安装 GitHub CLI 后可显示 PR 状态。", prAuthRequired: "请检查项目主机的 GitHub CLI 登录状态和仓库访问权限。",
+  prUnsupported: "PR 状态目前支持 GitHub 仓库。", prNoRemote: "当前仓库未配置用于查询 PR 的远端。", prDetached: "切换到分支后可显示对应的 PR 状态。",
+  prChecksPassed_one: "{{count}} 项检查通过", prChecksPassed_other: "{{count}} 项检查通过", prChecksFailed_one: "{{count}} 项检查失败", prChecksFailed_other: "{{count}} 项检查失败", prChecksPending_one: "{{count}} 项检查进行中", prChecksPending_other: "{{count}} 项检查进行中", prNoChecks: "暂无检查", prChecksSkipped: "检查已跳过", prChecksUnknown: "检查状态未知",
+  prApproved: "已批准", prChangesRequested: "需要修改", prReviewRequired: "等待 review", prConflicts: "存在合并冲突", prToggleChecks: "展开或收起 PR 检查详情",
+  prLastPush: "检查对应最后一次推送", prHeadDiffers: "PR 提交与当前工作区不同",
 };
 
 export const backendMessages = {

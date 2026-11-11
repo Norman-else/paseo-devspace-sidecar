@@ -4,10 +4,10 @@ import { catalogRpc } from "./shared/diff";
 import { messages } from "./client/messages";
 
 export default function contribute(client: PluginClientContext) {
-  client.addAgentPanel({ id: "devspace-diff", title: "DevSpace Diff", icon: "FileDiff", locations: ["explorer", "workspace"], Component: DiffPanel });
+  client.addAgentPanel({ id: "devspace-diff", title: messages.message("codeReview"), icon: "FileDiff", locations: ["explorer", "workspace"], Component: DiffPanel });
   // Existing file tabs restore into the same review surface after upgrading.
   client.addAgentPanel({ id: "devspace-file-diff", title: messages.message("codeReview"), icon: "FileDiff", locations: ["explorer", "workspace"], Component: DiffPanel });
-  client.addCommandCenterItem({ id: "open-diff", title: messages.message("openReview"), icon: "FileDiff", context: "agent",
+  client.addCommandCenterItem({ id: "open-diff", title: messages.message("openReview"), icon: "FileDiff", keywords: ["DevSpace", "diff", "PR", "review"], context: "agent",
     onSelect: ({ openPanel }) => openPanel("devspace-diff", { location: "explorer" }),
   });
   client.addSlashCommand({ name: "devspace-diff", description: messages.message("commandDescription"), argumentHint: "", context: "agent",
@@ -29,7 +29,7 @@ export default function contribute(client: PluginClientContext) {
       if (lifetime.signal.aborted || agents.get(agentId)?.workspaceId !== workspaceId) return;
       if (!context.workspace) { pills.get(agentId)?.remove(); pills.delete(agentId); return; }
       if (!pills.has(agentId)) pills.set(agentId, client.addComposerPill({ id: "devspace-diff", agentId, workspaceId,
-        button: { title: messages.message("openReview"), label: "DevSpace Diff", icon: "FileDiff", behavior: { kind: "action",
+        button: { title: messages.message("openReview"), label: messages.message("codeReview"), icon: "FileDiff", behavior: { kind: "action",
           onPress: () => client.openPanel("devspace-diff", { workspaceId, agentId, location: "explorer" }),
         } },
       }));

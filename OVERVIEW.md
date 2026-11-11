@@ -2,11 +2,13 @@
 
 View actual DevSpace worktree changes inside Paseo, including when the agent runs on a VPS and the project lives on your Mac.
 
-Open **DevSpace Diff** from the composer pill, Command Center, or `/devspace-diff`. The composer pill appears only for sessions associated with DevSpace. It automatically identifies the worktree from this agent's recent DevSpace tool calls. No workspace selection is needed.
+Open **Review** (**审阅** in Chinese) from the composer pill, Command Center, or `/devspace-diff`. The composer pill appears only for sessions associated with DevSpace. It automatically identifies the worktree from this agent's recent DevSpace tool calls. No workspace selection is needed.
 
 **Task changes** includes all changes since the task's starting commit, even after committing. **Uncommitted** combines staged, unstaged, and new files against HEAD. All file diffs appear in one continuous review, with a flat file index on the right for navigation. Files have collapsible headers, syntax highlighting, line numbers, Git colors, and reviewed markers. Updates run every three seconds; reviewed markers reset when the file's patch changes.
 
 Long code wraps to fit the code area, and the file index can be resized by dragging its divider. Labels follow Paseo's English or Simplified Chinese language setting automatically.
+
+A status strip shows the branch's GitHub PR, including draft/open/merged/closed state, CI checks, review decisions, and merge conflicts. It refreshes every 30 seconds and links to GitHub. The project machine needs an authenticated GitHub CLI; repository and branch metadata are queried through it, while credentials stay on that machine. PR status is read-only and does not create, approve, merge, or deploy changes.
 
 The project machine runs an authenticated read service over a private SSH tunnel. Requires Paseo >=0.15.4 and DevSpace's SQLite workspace registry. Configuration is in `~/.config/paseo-devspace-sidecar/config.json` on each host.
 

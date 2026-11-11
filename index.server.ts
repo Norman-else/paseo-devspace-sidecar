@@ -1,6 +1,7 @@
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { z } from "zod";
-import { catalogRpc, devspaceWorkspaceIds, fileRpc, fileResultSchema, reviewRpc, reviewSchema, snapshotRpc, snapshotSchema, suggestedWorkspace, workspaceSchema, type BridgeRequest } from "./shared/diff";
+import { catalogRpc, devspaceWorkspaceIds, fileRpc, fileResultSchema, pullRequestRpc, reviewRpc, reviewSchema, snapshotRpc, snapshotSchema, suggestedWorkspace, workspaceSchema, type BridgeRequest } from "./shared/diff";
+import { pullRequestResultSchema } from "./shared/pull-request";
 import { loadConfig } from "./server/config";
 import { startBridge } from "./server/bridge";
 import { LocalDiff } from "./server/git";
@@ -35,5 +36,6 @@ export default function contribute(server: PluginServerContext) {
   server.handle(snapshotRpc, async (input) => snapshotSchema.parse(await (await ready).request({ op: "snapshot", ...input })));
   server.handle(fileRpc, async (input) => fileResultSchema.parse(await (await ready).request({ op: "file", ...input })));
   server.handle(reviewRpc, async (input) => reviewSchema.parse(await (await ready).request({ op: "review", ...input })));
+  server.handle(pullRequestRpc, async (input) => pullRequestResultSchema.parse(await (await ready).request({ op: "pull-requests", ...input })));
   return async () => { try { await (await ready).close(); } catch { /* startup failure already reported */ } };
 }

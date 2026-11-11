@@ -1,5 +1,6 @@
 import { defineRpc } from "@getpaseo/plugin";
 import { z } from "zod";
+import { pullRequestResultSchema } from "./pull-request";
 
 export const workspaceId = z.string().regex(/^ws_[a-zA-Z0-9_-]+$/);
 export const comparison = z.enum(["task", "uncommitted"]);
@@ -34,11 +35,13 @@ export const fileRpc = defineRpc({
   name: "diff.file", input: z.object({ workspaceId, comparison, path: z.string().min(1) }), output: fileResultSchema,
 });
 export const reviewRpc = defineRpc({ name: "diff.review", input: z.object({ workspaceId, comparison }), output: reviewSchema });
+export const pullRequestRpc = defineRpc({ name: "github.pull-requests", input: z.object({ workspaceId }), output: pullRequestResultSchema });
 // The authenticated bridge intentionally exposes only read operations.
 export const bridgeRequest = z.discriminatedUnion("op", [
   z.object({ op: z.literal("catalog") }),
   z.object({ op: z.literal("snapshot"), workspaceId, comparison }),
   z.object({ op: z.literal("review"), workspaceId, comparison }),
+  z.object({ op: z.literal("pull-requests"), workspaceId }),
   z.object({ op: z.literal("file"), workspaceId, comparison, path: z.string().min(1) }),
 ]);
 export type BridgeRequest = z.infer<typeof bridgeRequest>;

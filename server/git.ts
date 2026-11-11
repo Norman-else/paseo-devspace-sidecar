@@ -6,6 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { promisify } from "node:util";
 import type { BridgeRequest, ChangedFile, Review, ReviewFile, Snapshot, Workspace } from "../shared/diff";
 import { isRelativeFile, isWithin, samePath } from "./paths";
+import { PullRequests } from "./pull-requests";
 
 const exec = promisify(execFile);
 const MAX_FILES = 2000;
@@ -19,6 +20,7 @@ export async function git(root: string, args: string[], maxBuffer = 8 * 1024 * 1
 type StoredWorkspace = { id: string; root: string; source_root: string | null; mode: string; base_sha: string | null; last_used_at: string };
 export class LocalDiff {
   private reviews = new Map<string, { revision: string; promise: Promise<Review> }>();
+  private github = new PullRequests();
   constructor(private databasePath: string) {}
   private rows(): StoredWorkspace[] {
     const db = new DatabaseSync(this.databasePath, { readOnly: true });
@@ -45,6 +47,18 @@ export class LocalDiff {
     const ref = comparison === "task" ? workspace.baseSha : "HEAD";
     if (!ref) throw new Error("This workspace has no task starting commit. Choose Uncommitted instead.");
     return (await git(root, ["rev-parse", "--verify", `${ref}^{commit}`])).trim();
+  }
+  async pullRequests(id: string) {
+    const { workspace, root } = await this.workspace(id);
+    if (!workspace.branch) return this.github.unavailable("detached_head");
+    try {
+      const names = (await git(root, ["remote"])).trim().split(/\r?\n/).filter(Boolean);
+      const preferences = await Promise.all([`branch.${workspace.branch}.pushRemote`, "remote.pushDefault", `branch.${workspace.branch}.remote`].map(async (key) => (await git(root, ["config", "--get", key]).catch(() => "")).trim()));
+      const remoteName = preferences.find((name) => names.includes(name)) ?? (names.includes("origin") ? "origin" : names.length === 1 ? names[0] : null);
+      if (!remoteName) return this.github.unavailable("no_remote");
+      const [remote, localHeadSha] = await Promise.all([git(root, ["remote", "get-url", "--push", "--", remoteName]), git(root, ["rev-parse", "HEAD"])]);
+      return this.github.read({ root, branch: workspace.branch, remote: remote.trim(), localHeadSha: localHeadSha.trim() });
+    } catch { return this.github.unavailable("request_failed"); }
   }
   async snapshot(id: string, comparison: "task" | "uncommitted"): Promise<Snapshot> {
     const { workspace, root } = await this.workspace(id);
@@ -155,6 +169,7 @@ export class LocalDiff {
     if (input.op === "catalog") return this.catalog();
     if (input.op === "snapshot") return this.snapshot(input.workspaceId, input.comparison);
     if (input.op === "review") return this.review(input.workspaceId, input.comparison);
+    if (input.op === "pull-requests") return this.pullRequests(input.workspaceId);
     return this.file(input.workspaceId, input.comparison, input.path);
   }
 }

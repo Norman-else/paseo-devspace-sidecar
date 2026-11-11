@@ -27,7 +27,7 @@ This copies source to `~/PersonalRepos/paseo-devspace-sidecar` on the VPS, confi
 
 ## Using the panel
 
-Select the task's agent and click **DevSpace Diff** beside the composer, run `/devspace-diff`, or use Command Center → **Open DevSpace Diff**. The composer button appears only after this session is associated with a DevSpace workspace. The continuous review opens in the right Explorer sidebar.
+Select the task's agent and click **Review** (**审阅** in Chinese) beside the composer, run `/devspace-diff`, or use Command Center → **View code changes and PR status**. The composer button appears only after this session is associated with a DevSpace workspace. The continuous review opens in the right Explorer sidebar under **Review**. Existing commands and saved tabs remain compatible.
 
 The panel automatically binds to the latest explicit DevSpace workspace target in this agent's last 200 timeline entries. No workspace picker is shown. A conversation that has not used DevSpace gets an empty state explaining where changes appear. Ordinary assistant prose, project names, failed calls, and workspace IDs mentioned in command output do not select a worktree.
 
@@ -40,6 +40,9 @@ The panel automatically binds to the latest explicit DevSpace workspace target i
 - The flat file index on the right jumps to the file in that document. On a narrow panel, the list button opens the same index. There is no directory tree or per-file page navigation.
 - Drag the divider between the diff and the file index to resize the index. The width is saved with the tab and constrained so the code area stays usable.
 - File headers fold/unfold code and let you mark files as reviewed. Markers persist with the tab and reset for a file when its patch changes. Updates run every three seconds while mounted.
+- The PR status strip automatically finds GitHub pull requests for the actual worktree's branch. It shows open/draft/merged/closed state, review decisions, conflicts, and GitHub Actions or external status checks. Click the PR title to open GitHub or expand the checks for their individual links. PR data refreshes every 30 seconds and with the toolbar refresh action.
+
+PR status requires `gh` (GitHub CLI) installed and authenticated on the project host that runs the local sidecar bridge. No GitHub credentials are sent to the VPS or stored in this repository. Lookups use the branch's push/tracking remote and support GitHub forks by matching the head repository owner as well as the branch name. Multiple open PRs for that branch are shown; otherwise the most recently updated matching merged/closed PR is shown. Missing PRs, unavailable authentication, and failed requests are separate states. Check results refer to the PR's last pushed commit, not uncommitted local edits. These operations only read status; they do not create, approve, merge, or deploy a PR.
 
 SQLite is opened read-only. Git disables optional index refreshes, external diff drivers, and text conversion. The plugin never stages, commits, resets, or edits project files. Untracked symlinks display their target path, not file contents outside the worktree.
 

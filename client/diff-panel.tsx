@@ -4,13 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useRpc, useTabState, type PluginAgentPanelProps } from "@getpaseo/plugin/client";
 import { FlatList, Icon, TextInput } from "@getpaseo/plugin/client/ui";
 import { z } from "zod";
-import { catalogRpc, comparison, fileRpc, reviewRpc, snapshotRpc, type ReviewFile } from "../shared/diff";
+import { catalogRpc, comparison, fileRpc, pullRequestRpc, reviewRpc, snapshotRpc, type ReviewFile } from "../shared/diff";
 import { reviewRows, type ReviewRow } from "../shared/review";
 import { CodeLine, FileHeader, FileIndex, ToolButton } from "./review-ui";
 import { DIVIDER_WIDTH, ResizeDivider } from "./resize-divider";
 import { useRowMeasurements } from "./use-row-measurements";
 import { useMessages } from "./messages";
 import { useCodeAppearance } from "./use-code-appearance";
+import { PullRequestStatus } from "./pull-request-status";
 
 const stateSchema = z.object({ comparison, scope: z.string().default(""), collapsed: z.array(z.string()).default([]), reviewed: z.record(z.string(), z.string()).default({}), indexWidth: z.number().min(140).max(520).nullable().default(null) });
 export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
@@ -31,6 +32,12 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
   const catalogCall = useRpc(catalogRpc), snapshotCall = useRpc(snapshotRpc), reviewCall = useRpc(reviewRpc), fileCall = useRpc(fileRpc);
   const catalog = useQuery({ queryKey: ["devspace-context-v2", host.id, params.agentId], queryFn: () => catalogCall({ agentId: params.agentId }), refetchInterval: 15000, retry: false });
   const bound = catalog.data?.workspace;
+  const prCall = useRpc(pullRequestRpc);
+  const pullRequests = useQuery({
+    queryKey: ["devspace-pull-requests", host.id, bound?.id, bound?.branch],
+    queryFn: () => prCall({ workspaceId: bound!.id }), enabled: !!bound,
+    refetchInterval: 30000, staleTime: 10000, retry: false,
+  });
   const snapshot = useQuery({
     queryKey: ["devspace-snapshot", host.id, params.agentId, bound?.id, state.comparison],
     queryFn: () => snapshotCall({ workspaceId: bound!.id, comparison: state.comparison }), enabled: !!bound, refetchInterval: 3000, retry: false,
@@ -83,7 +90,7 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
     if (collapsed.has(path)) mutate({ collapsed: [...collapsed].filter((p) => p !== path) });
     setJump(path); setIndexOpen(false); void load(path);
   };
-  const refresh = () => { void catalog.refetch(); if (bound) { void snapshot.refetch(); if (snapshot.data) void document.refetch(); } };
+  const refresh = () => { void catalog.refetch(); if (bound) { void snapshot.refetch(); void pullRequests.refetch(); if (snapshot.data) void document.refetch(); } };
   const totals = snapshot.data?.files.reduce((sum, file) => ({ plus: sum.plus + (file.additions ?? 0), minus: sum.minus + (file.deletions ?? 0) }), { plus: 0, minus: 0 });
   const error = catalog.error ?? snapshot.error ?? document.error;
   const reviewedCount = files.filter((file) => file.hash && reviewed[file.path] === file.hash).length;
@@ -92,7 +99,7 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
     <View style={{ paddingHorizontal: 12, paddingVertical: 8, gap: 8, borderBottomWidth: 1, borderColor: colors.border }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <Icon name={bound ? "GitBranch" : "FileDiff"} size={14} color={colors.foregroundMuted} />
-        <Text style={{ color: colors.foreground, fontSize: 12, fontWeight: "600", flex: 1 }} numberOfLines={1}>{bound?.branch ?? "DevSpace Diff"}</Text>
+        <Text style={{ color: colors.foreground, fontSize: 12, fontWeight: "600", flex: 1 }} numberOfLines={1}>{bound?.branch ?? t("codeReview")}</Text>
         {bound ? <>
           <ToolButton icon="Search" label={t("filterFiles")} colors={colors} onPress={() => { setSearchOpen(!searchOpen); setSearch(""); }} active={searchOpen} />
           <ToolButton icon="ListCollapse" label={t(collapsed.size ? "expandAll" : "collapseAll")} colors={colors} onPress={() => mutate({ collapsed: collapsed.size ? [] : files.map((f) => f.path) })} />
@@ -112,6 +119,7 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
       </View> : null}
       {searchOpen ? <TextInput value={search} onChangeText={setSearch} autoFocus placeholder={t("filterPlaceholder")} accessibilityLabel={t("filterFiles")} style={{ color: colors.foreground, borderWidth: 1, borderColor: colors.border, borderRadius: 4, padding: 7, fontSize: 12 }} /> : null}
     </View>
+    {bound ? <PullRequestStatus key={`${bound.id}:${bound.branch}`} result={pullRequests.data} loading={pullRequests.isPending} error={pullRequests.error} colors={colors} /> : null}
     {error ? <Text selectable style={{ color: colors.statusDanger, padding: 12, fontSize: 12 }}>{translateBackend(error.message)}</Text> : null}
     {catalog.isPending || (bound && !document.data && (snapshot.isPending || document.isPending)) ? <ActivityIndicator color={colors.foregroundMuted} style={{ margin: 24 }} /> : null}
     {!catalog.isPending && !bound ? <View style={{ padding: 20, gap: 8 }}><Text style={{ color: colors.foreground, fontSize: 13 }}>{t("noAssociation")}</Text><Text style={{ color: colors.foregroundMuted, fontSize: 12, lineHeight: 20 }}>{catalog.data?.inferenceError ? translateBackend(catalog.data.inferenceError) : t("noAssociationHelp")}</Text></View> : null}

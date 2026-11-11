@@ -159,6 +159,8 @@ test("bridge authenticates, rejects browser origins, proxies Git results and rep
     assert.equal((await fetch(endpoint + "/rpc", { method: "POST", headers: { Authorization: `Bearer ${token}`, Origin: "http://evil.invalid" }, body: "{}" })).status, 401);
     const catalog = await remoteRequest({ mode: "remote", endpoint, token }, { op: "catalog" }) as Workspace[];
     assert.equal(catalog[0].id, "ws_test");
+    const pr = await remoteRequest({ mode: "remote", endpoint, token }, { op: "pull-requests", workspaceId: "ws_test" }) as { status: string; reason: string };
+    assert.equal(pr.status, "unavailable"); assert.equal(pr.reason, "no_remote");
     await assert.rejects(() => remoteRequest({ mode: "remote", endpoint: "https://example.com", token }, { op: "catalog" }), /loopback/);
     await assert.rejects(() => remoteRequest({ mode: "remote", endpoint, token: "wrong" }, { op: "catalog" }), /Unauthorized/);
     bridge.closeAllConnections();
@@ -250,15 +252,15 @@ test("Paseo's locale runtime updates labels, plural counts and persistent messag
     assert.equal(runtime.t(bundle, "taskChanges"), "Task changes");
     assert.equal(runtime.t(bundle, "files", { count: 1 }), "1 file");
     assert.equal(runtime.t(bundle, "files", { count: 22 }), "22 files");
-    assert.equal(runtime.resolve(persistentLabel), "Open DevSpace Diff");
+    assert.equal(runtime.resolve(persistentLabel), "View code changes and PR status");
     locale = "zh-CN";
     for (const notify of listeners) notify();
     assert.equal(runtime.t(bundle, "taskChanges"), "任务改动");
     assert.equal(runtime.t(bundle, "files", { count: 22 }), "22 个文件");
-    assert.equal(runtime.resolve(persistentLabel), "打开 DevSpace Diff");
+    assert.equal(runtime.resolve(persistentLabel), "查看代码改动与 PR 状态");
     locale = "en";
     for (const notify of listeners) notify();
-    assert.equal(runtime.resolve(persistentLabel), "Open DevSpace Diff");
+    assert.equal(runtime.resolve(persistentLabel), "View code changes and PR status");
   } finally { runtime.dispose(); }
 });
 
