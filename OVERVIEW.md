@@ -12,7 +12,7 @@ A flat header shows the branch's GitHub PR, including draft/open/merged/closed s
 
 When a PR exists, switch between its submitted changes and local changes not present in that PR. Use the separate Comments tab to read discussions with author names and avatars, or open their code directly from file comment counts and previous/next comment controls. Inline markers expand in place. Filter unresolved threads, inspect check details, and prepare feedback for the current agent. Feedback opens an editable draft and is sent only when you select Send to agent. GitHub Actions failures can include error excerpts; external CI checks link to their own providers.
 
-Expand omitted code context, search loaded diff text, and navigate files or changed blocks from the bottom toolbar. Save a review point to compare later edits with reviewed text. Review points are private sidecar state, limited to 200 text files and 8 MiB, with a 512 KiB per-file limit. Omitted files are reported. Mobile layouts keep navigation and feedback available without a directory tree.
+Expand omitted code context, search loaded diff text, and navigate files from the flat index. Save a review point to compare later edits with reviewed text. Review points are private sidecar state, limited to 200 text files and 8 MiB, with a 512 KiB per-file limit. Omitted files are reported. Code selection uses draggable green + handles and a nearby floating action toolbar. Mobile layouts keep feedback available without a directory tree or a bottom operation bar.
 
 The project machine runs an authenticated read service over a private SSH tunnel. Requires Paseo >=0.15.4 and DevSpace's SQLite workspace registry. Configuration is in `~/.config/paseo-devspace-sidecar/config.json` on each host.
 

@@ -7,7 +7,7 @@ declare const window: {
   localStorage: { getItem(key: string): string | null };
   addEventListener(type: string, listener: () => void): void;
   removeEventListener(type: string, listener: () => void): void;
-  getSelection(): { isCollapsed: boolean; toString(): string; anchorNode: SelectionNode | null; focusNode: SelectionNode | null } | null;
+  getSelection(): { isCollapsed: boolean; toString(): string; anchorNode: SelectionNode | null; focusNode: SelectionNode | null; removeAllRanges(): void } | null;
 };
 type SelectionNode = { nodeType: number; parentElement: SelectionElement | null };
 type SelectionElement = SelectionNode & { closest(selector: string): SelectionElement | null; dataset: Record<string, string | undefined> };
@@ -58,4 +58,14 @@ export function watchCodeSelection(scope: string, selected: (selection: import("
   };
   window.addEventListener("mouseup", read);
   return () => window.removeEventListener("mouseup", read);
+}
+
+export function clearNativeCodeSelection() {
+  if (Platform.OS === "web" && typeof window !== "undefined") window.getSelection()?.removeAllRanges();
+}
+
+export function watchSelectionCancellation(cancel: () => void) {
+  if (Platform.OS !== "web" || typeof window === "undefined") return () => {};
+  window.addEventListener("blur", cancel);
+  return () => window.removeEventListener("blur", cancel);
 }

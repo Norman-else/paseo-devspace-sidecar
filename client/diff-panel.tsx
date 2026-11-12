@@ -2,12 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Pressable, Text, View, type FlatList as NativeFlatList } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRpc, useTabState, type PluginAgentPanelProps } from "@getpaseo/plugin/client";
-import { FlatList, Icon, useToast } from "@getpaseo/plugin/client/ui";
+import { FlatList, Icon, copyText, useToast } from "@getpaseo/plugin/client/ui";
 import { z } from "zod";
 import { catalogRpc, comparison as comparisonSchema, contextRpc, checkpointRpc, threadsRpc, fileRpc, pullRequestRpc, reviewRpc, snapshotRpc, type ReviewFile, type Snapshot } from "../shared/diff";
 import { checkpointSchema, type ReviewThread } from "../shared/review-details";
 import { HEADER_HEIGHT, reviewRows, type ReviewRow, type ReviewExtras } from "../shared/review";
-import { selectedCode, selectLine, type LineSelection } from "../shared/selection";
+import { selectedCode, selectLine } from "../shared/selection";
 import { CodeLine, FileHeader, FileIndex, ToolButton } from "./review-ui";
 import { DIVIDER_WIDTH, ResizeDivider } from "./resize-divider";
 import { useRowMeasurements } from "./use-row-measurements";
@@ -21,8 +21,10 @@ import { Discussions, InlineDiscussion } from "./review-discussions";
 import { ReviewChecks } from "./review-checks";
 import { FeedbackComposer, type FeedbackDraft } from "./feedback-composer";
 import { ReviewOptions } from "./review-options";
-import { watchCodeSelection } from "./web";
+import { clearNativeCodeSelection, watchCodeSelection } from "./web";
 import { ReviewTabs } from "./review-tabs";
+import { FloatingSelectionActions } from "./floating-selection-actions";
+import { useCodeSelection } from "./use-code-selection";
 import { fileDiscussions, nextDiscussion } from "../shared/comment-navigation";
 
 const stateSchema = z.object({ comparison: comparisonSchema, scope: z.string().default(""), collapsed: z.array(z.string()).default([]), reviewed: z.record(z.string(), z.string()).default({}), indexWidth: z.number().min(140).max(520).nullable().default(null), prNumber: z.number().int().optional(), filter: z.enum(["all", "unreviewed", "since"]).default("all"), points: z.record(z.string(), checkpointSchema).default({}), view: z.enum(["changes", "comments"]).default("changes") });
@@ -35,7 +37,7 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
   const [dragWidth, setDragWidth] = useState<number | null>(null), [size, setSize] = useState({ width: 700, height: 700 });
   const [search, setSearch] = useState(""), [searchOpen, setSearchOpen] = useState(false), [searchType, setSearchType] = useState<"files" | "code">("files");
   const [indexOpen, setIndexOpen] = useState(false), [optionsOpen, setOptionsOpen] = useState(false), [activePath, setActivePath] = useState("");
-  const [jump, setJump] = useState<Jump | null>(null), [selection, setSelection] = useState<LineSelection | null>(null), [draft, setDraft] = useState<FeedbackDraft | null>(null);
+  const [jump, setJump] = useState<Jump | null>(null), [draft, setDraft] = useState<FeedbackDraft | null>(null);
   const [detail, setDetail] = useState<"checks" | null>(null), [showResolved, setShowResolved] = useState(false);
   const [saving, setSaving] = useState(false), [loadingContext, setLoadingContext] = useState("");
   const [overrides, setOverrides] = useState<Record<string, ReviewFile>>({});
@@ -79,6 +81,9 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
   const expandedThreads = useMemo(() => new Set(openedThreads.version === version ? openedThreads.ids : []), [openedThreads, version]);
   const model = useMemo(() => reviewRows(files, searchType === "code" && search ? new Set() : collapsed, Math.max(1, viewportWidth - typography.gutterWidth - 8), heights, typography, { contexts: extra.version === version ? extra.contexts : {}, threads: inlineThreads, expandedThreads, anchors: anchors.version === version ? anchors.values : {} }), [expandedThreads, anchors, files, collapsed, viewportWidth, heights, typography, extra, version, inlineThreads, searchType, search]);
   const list = useRef<NativeFlatList<ReviewRow>>(null), sticky = useStickyFileHeader(model, setActivePath);
+  const codeSelection = useCodeSelection({ model, width: viewportWidth, height: size.height, gutterWidth: typography.gutterWidth, scope: version, list });
+  const { selection, setSelection } = codeSelection;
+  useEffect(() => { sticky.reset(); codeSelection.onScroll(0); list.current?.scrollToOffset({ offset: 0, animated: false }); }, [scope, since]);
   useEffect(() => { setSelection(null); }, [version, search, state.filter]);
   useEffect(() => watchCodeSelection(version, (value) => { setSelection(value); setDetail(null); }), [version]);
   useEffect(() => {
@@ -105,18 +110,11 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
   const error = catalog.error ?? snapshot.error ?? document.error;
   const reviewedCount = allFiles.filter((file) => file.hash && reviewed[file.path] === file.hash).length;
   const selected = files.some((file) => file.path === activePath) ? activePath : files[0]?.path ?? "";
-  const selectedIndex = Math.max(0, files.findIndex((file) => file.path === selected));
   const matches = useMemo(() => searchType === "code" && search.trim() ? model.rows.flatMap((row, index) => row.kind === "code" && row.line.text.toLowerCase().includes(search.toLowerCase()) ? [index] : []) : [], [model, search, searchType]);
   const [matchIndex, setMatchIndex] = useState(-1);
   const matchIndexRef = useRef(-1);
   useEffect(() => { setMatchIndex(-1); matchIndexRef.current = -1; }, [search, version]);
   const match = (direction: number) => { if (!matches.length) return; const next = matchIndexRef.current < 0 ? direction > 0 ? 0 : matches.length - 1 : (matchIndexRef.current + direction + matches.length) % matches.length; setMatchIndex(next); matchIndexRef.current = next; const row = model.rows[matches[next]]; navigate(row.path, row.key); };
-  const change = (direction: number) => {
-    const indices = model.rows.flatMap((row, index, rows) => row.kind === "code" && (row.line.kind === "add" || row.line.kind === "remove") && !(rows[index - 1]?.kind === "code" && ["add", "remove"].includes((rows[index - 1] as Extract<ReviewRow, { kind: "code" }>).line.kind)) ? [index] : []);
-    const start = sticky.scrollOffset() + HEADER_HEIGHT + 0.5;
-    const next = direction > 0 ? indices.find((index) => model.offsets[index] > start) ?? indices[0] : [...indices].reverse().find((index) => model.offsets[index] < start - 1) ?? indices.at(-1);
-    if (next !== undefined) navigate(model.rows[next].path, model.rows[next].key);
-  };
   const expandContext = async (row: Extract<ReviewRow, { kind: "gap" }>) => {
     if (!bound || !document.data || loadingContext || row.omitted === 0) return;
     const existing = extra.version === version ? extra.contexts[row.key]?.lines ?? [] : [];
@@ -196,24 +194,24 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
       if (view === "changes" && height > 0) setSize((previous) => previous.height === height ? previous : { ...previous, height });
     }}>
       {document.data && bound ? <>
-        <View style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: "hidden" }}>
+        <View testID="devspace-code-viewport" ref={codeSelection.viewport} onLayout={codeSelection.measureViewport} style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: "hidden" }}>
           <FlatList<ReviewRow> ref={list} data={model.rows} style={{ flex: 1, width: viewportWidth, height: size.height }} keyExtractor={(row) => row.key} initialNumToRender={55} maxToRenderPerBatch={55} windowSize={9}
-            getItemLayout={(_, index) => ({ length: model.rows[index]?.height ?? 20, offset: model.offsets[index] ?? 0, index })} onScroll={(event) => { if (view === "changes") sticky.onScroll(event); }} scrollEventThrottle={16}
+            getItemLayout={(_, index) => ({ length: model.rows[index]?.height ?? 20, offset: model.offsets[index] ?? 0, index })} scrollEnabled={!codeSelection.dragging} onScroll={(event) => { if (view === "changes") { const offset = event.nativeEvent.contentOffset.y; sticky.onScroll(event); codeSelection.onScroll(offset); } }} scrollEventThrottle={16}
             ListEmptyComponent={<Text style={{ color: colors.foregroundMuted, padding: 20, fontSize: 12 }}>{t(search ? "noMatches" : since ? "emptyCheckpoint" : "noChanges")}</Text>}
             renderItem={({ item: row }) => row.kind === "header" ? <FileHeader {...commentProps(row.file)} file={row.file} width={viewportWidth} colors={colors} collapsed={collapsed.has(row.path)} reviewed={!!row.file.hash && reviewed[row.path] === row.file.hash} onToggle={() => toggle(row.path)} onReview={() => mark(row.file)} />
-              : row.kind === "code" ? <CodeLine row={row} colors={colors} typography={typography} selectionScope={version} selection={selection} match={searchType === "code" && !!search && row.line.text.toLowerCase().includes(search.toLowerCase())} onSelect={(side, line) => { setDetail(null); if (!selection) toast.show(t("selectionHint")); setSelection((previous) => selectLine(previous, row.path, side, line)); }} onHeight={(height) => report(row.key, height, layoutKey)} />
+              : row.kind === "code" ? <CodeLine compact={!wide} onDragStart={codeSelection.start} onDragMove={codeSelection.move} onDragEnd={codeSelection.end} row={row} colors={colors} typography={typography} selectionScope={version} selection={selection} match={searchType === "code" && !!search && row.line.text.toLowerCase().includes(search.toLowerCase())} onSelect={(side, line) => { setDetail(null); if (!selection) toast.show(t("selectionHint")); setSelection((previous) => selectLine(previous, row.path, side, line)); }} onHeight={(height) => report(row.key, height, layoutKey)} />
               : row.kind === "thread" ? <InlineDiscussion thread={row.thread} expanded={expandedThreads.has(row.thread.id)} onToggle={() => toggleThread(row.thread.id)} colors={colors} onFeedback={threadFeedback} onHeight={(height) => report(row.key, height, layoutKey)} />
               : row.kind === "gap" ? <Pressable accessibilityRole={row.omitted !== 0 ? "button" : undefined} disabled={row.omitted === 0 || !!loadingContext} onPress={() => void expandContext(row)} style={{ width: viewportWidth, minHeight: row.height, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, gap: 8, backgroundColor: colors.surface0 }}><Icon name="ChevronsUpDown" size={11} color={colors.foregroundMuted} /><Text style={{ fontSize: 11, color: row.omitted !== 0 ? colors.accent : colors.foregroundMuted }}>{loadingContext === row.key ? t("contextLoading") : row.omitted < 0 ? t("followingContext") : row.omitted ? t("showContext", { count: Math.min(20, row.omitted) }) : t("context")}</Text><Text style={{ flex: 1, minWidth: 0, color: colors.foregroundMuted, fontSize: 10 }} numberOfLines={1}>{row.label === "__discussion__" ? t("discussionContext") : row.label}</Text></Pressable>
               : <Pressable accessibilityRole={row.deferred ? "button" : undefined} onPress={() => { if (row.deferred) void load(row.path); }} style={{ width: viewportWidth, minHeight: row.height, paddingHorizontal: 12, justifyContent: "center" }}><Text style={{ color: row.deferred ? colors.accent : colors.foregroundMuted, fontSize: 11 }}>{translateBackend(row.text)}</Text></Pressable>}
           />
           {sticky.file ? <Animated.View style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, transform: [{ translateY: sticky.translateY }] }} testID="devspace-sticky-file-header"><FileHeader {...commentProps(sticky.file)} file={sticky.file} width={viewportWidth} colors={colors} collapsed={collapsed.has(sticky.file.path)} reviewed={!!sticky.file.hash && reviewed[sticky.file.path] === sticky.file.hash} onToggle={() => toggle(sticky.file!.path)} onReview={() => mark(sticky.file!)} /></Animated.View> : null}
+          {view === "changes" && !draft && selection && codeSelection.visible ? <FloatingSelectionActions colors={colors} compact={!wide} x={codeSelection.x} y={codeSelection.y} width={codeSelection.width} onHeight={codeSelection.measureToolbar} onExplain={() => codeFeedback("explain")} onChange={() => codeFeedback("change")} onCopy={() => { void copyText(selectedCode(model.rows, selection, Infinity)).then(() => toast.show(t("copiedCode"))).catch(() => toast.error(t("feedbackError"))); }} onClose={() => { clearNativeCodeSelection(); setSelection(null); }} /> : null}
         </View>
         {wide ? <><ResizeDivider width={indexWidth} min={140} max={maxIndexWidth} colors={colors} onResize={setDragWidth} onCommit={(width) => { save({ ...latestState.current, indexWidth: width }); setDragWidth(null); }} /><View style={{ width: indexWidth, flexShrink: 0 }}><FileIndex files={files} activePath={selected} reviewed={reviewed} colors={colors} onJump={navigate} /></View></>
           : indexOpen ? <View style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0, backgroundColor: colors.surface0 }}><View style={{ paddingLeft: 12, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderColor: colors.border }}><Text style={{ flex: 1, color: colors.foreground, fontSize: 12 }}>{t("changedFiles")}</Text><ToolButton touch icon="X" label={t("closeIndex")} colors={colors} onPress={() => setIndexOpen(false)} /></View><FileIndex files={files} activePath={selected} reviewed={reviewed} colors={colors} onJump={navigate} /></View> : null}
       </> : null}
     </View>
-    {view === "changes" && bound && files.length ? <View style={{ paddingHorizontal: 8, minHeight: wide ? 36 : 44, borderTopWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 2 }}><Text numberOfLines={1} style={{ flex: 1, minWidth: 0, color: colors.foregroundMuted, fontSize: 11 }}>{selected.split("/").at(-1)} · {selectedIndex + 1}/{files.length}</Text><ToolButton touch={!wide} icon="ChevronLeft" label={t("previousFile")} colors={colors} onPress={() => navigate(files[(selectedIndex - 1 + files.length) % files.length].path)} /><ToolButton touch={!wide} icon="ChevronRight" label={t("nextFile")} colors={colors} onPress={() => navigate(files[(selectedIndex + 1) % files.length].path)} /><View style={{ width: 1, height: 16, backgroundColor: colors.border, marginHorizontal: 4 }} /><ToolButton touch={!wide} icon="ChevronUp" label={t("previousChange")} colors={colors} onPress={() => change(-1)} /><ToolButton touch={!wide} icon="ChevronDown" label={t("nextChange")} colors={colors} onPress={() => change(1)} /></View> : null}
-    {view === "changes" && selection ? <View style={{ paddingHorizontal: 12, paddingVertical: 6, gap: 4, borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.surface1 }}><Text numberOfLines={1} style={{ color: colors.foregroundMuted, fontSize: 11 }}>{selection.path} · L{Math.min(selection.start, selection.end)}–{Math.max(selection.start, selection.end)}</Text><View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}><Pressable accessibilityRole="button" onPress={() => codeFeedback("explain")} style={{ minHeight: 36, justifyContent: "center" }}><Text style={{ color: colors.foreground, fontSize: 13 }}>{t("explainCode")}</Text></Pressable><Pressable accessibilityRole="button" onPress={() => codeFeedback("change")} style={{ minHeight: 36, justifyContent: "center" }}><Text style={{ color: colors.accent, fontSize: 13 }}>{t("requestChange")}</Text></Pressable><View style={{ flex: 1 }} /><ToolButton touch={!wide} icon="X" label={t("clearSelection")} colors={colors} onPress={() => setSelection(null)} /></View></View> : null}
+
     <ReviewOptions open={optionsOpen} onClose={() => setOptionsOpen(false)} filter={state.filter} point={point} busy={saving} onSave={() => void savePoint()} onFilter={(filter) => save({ ...state, filter })} colors={colors} />
     <FeedbackComposer draft={draft} agentId={params.agentId} colors={colors} onClose={() => setDraft(null)} />
   </View>;

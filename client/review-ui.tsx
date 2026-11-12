@@ -1,15 +1,16 @@
 import { useState } from "react";
-import { Platform, Pressable, Text, View, type TextStyle } from "react-native";
+import { Platform, Pressable, Text, View, type TextStyle, type ViewStyle } from "react-native";
 import { FlatList, Icon } from "@getpaseo/plugin/client/ui";
 import type { PluginAgentPanelProps } from "@getpaseo/plugin/client";
 import type { ReviewFile } from "../shared/diff";
 import type { ReviewRow } from "../shared/review";
 import { useMessages } from "./messages";
-import { diffBackground, type CodeAppearance } from "../shared/appearance";
+import { diffBackground, SELECTION_HANDLE_WIDTH, type CodeAppearance } from "../shared/appearance";
 import { codeSelectionProps } from "./web";
 import type { LineSelection } from "../shared/selection";
 
 export type Colors = PluginAgentPanelProps["theme"]["colors"];
+const nonSelectingStyle = Platform.OS === "web" ? ({ userSelect: "none", touchAction: "none", cursor: "crosshair" } as unknown as ViewStyle) : {};
 const fileNameTypography = { fontSize: 12, lineHeight: 18, fontWeight: "500" as const };
 export function ToolButton({ icon, label, colors, onPress, active = false, touch = false }: { icon: string; label: string; colors: Colors; onPress(): void; active?: boolean; touch?: boolean }) {
   const [hover, setHover] = useState(false);
@@ -62,19 +63,29 @@ export function FileIndex({ files, activePath, reviewed, colors, onJump }: { fil
     </Pressable>}
   />;
 }
-export function CodeLine({ row, colors, typography, onHeight, selection, onSelect, match = false, selectionScope = "" }: { row: Extract<ReviewRow, { kind: "code" }>; colors: Colors; typography: CodeAppearance; onHeight(height: number): void; selection?: LineSelection | null; onSelect?(side: "old" | "new", line: number): void; match?: boolean; selectionScope?: string }) {
+export function CodeLine({ row, colors, typography, onHeight, selection, onSelect, match = false, selectionScope = "", compact = false, onDragStart, onDragMove, onDragEnd }: { row: Extract<ReviewRow, { kind: "code" }>; colors: Colors; typography: CodeAppearance; onHeight(height: number): void; selection?: LineSelection | null; onSelect?(side: "old" | "new", line: number): void; match?: boolean; selectionScope?: string; compact?: boolean; onDragStart?(path: string, side: "old" | "new", line: number, pageY: number): void; onDragMove?(pageY: number): void; onDragEnd?(): void }) {
   const { t } = useMessages();
+  const [hovered, setHovered] = useState(false);
   const { fontFamily, fontSize, lineHeight, gutterFontSize, gutterCellWidth, markerWidth } = typography;
   const { line, tokens } = row;
   const add = line.kind === "add", remove = line.kind === "remove";
   const number = selection?.side === "old" ? line.old : line.next;
   const selected = selection?.path === row.path && number !== undefined && number >= Math.min(selection.start, selection.end) && number <= Math.max(selection.start, selection.end);
+  const handleActive = hovered || selected && (number === selection?.start || number === selection?.end);
   const tone = add ? colors.statusSuccess : remove ? colors.statusDanger : colors.foregroundMuted;
   const palette = { plain: colors.foreground, comment: colors.foregroundMuted, string: colors.statusSuccess, keyword: colors.accent, number: colors.statusWarning, type: colors.statusWarning, function: colors.accent };
-  return <View {...codeSelectionProps(selectionScope, row.path, line.old, line.next)} onLayout={(event) => onHeight(event.nativeEvent.layout.height)} style={{ minHeight: lineHeight, flexDirection: "row", alignItems: "flex-start", paddingRight: 8,
+  const handleSide = line.next === undefined ? "old" : "new", handleLine = (line.next ?? line.old)!;
+  return <View {...codeSelectionProps(selectionScope, row.path, line.old, line.next)} onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)} onLayout={(event) => onHeight(event.nativeEvent.layout.height)} style={{ minHeight: lineHeight, flexDirection: "row", alignItems: "flex-start", paddingRight: 8,
     backgroundColor: selected ? diffBackground(colors.accent, colors.surface0) : add || remove ? diffBackground(tone, colors.surface0) : colors.surface0, borderLeftWidth: 3, borderLeftColor: selected ? colors.accent : match ? colors.statusWarning : add || remove ? tone : "transparent" }}>
-    {(["old", "new"] as const).map((side) => <Pressable key={side} accessibilityRole="button" accessibilityLabel={t("selectCodeLine", { path: row.path, line: side === "old" ? line.old ?? "" : line.next ?? "", side: t(side === "old" ? "versionOld" : "versionNew") })} disabled={!onSelect || (side === "old" ? line.old : line.next) === undefined} onPress={() => onSelect?.(side, (side === "old" ? line.old : line.next)!)} style={{ width: gutterCellWidth, minHeight: lineHeight, flexShrink: 0 }}><Text style={{ textAlign: "right", paddingRight: 6, lineHeight, color: selected ? colors.foreground : colors.foregroundMuted, fontFamily, fontSize: gutterFontSize }}>{(side === "old" ? line.old : line.next) ?? ""}</Text></Pressable>)}
-    <Text style={{ width: markerWidth, flexShrink: 0, lineHeight, color: tone, fontFamily, fontSize }}>{add ? "+" : remove ? "−" : " "}</Text>
+    <View accessible accessibilityRole="button" accessibilityLabel={t("dragCodeSelection", { path: row.path, line: handleLine, side: t(handleSide === "old" ? "versionOld" : "versionNew") })} accessibilityActions={[{ name: "activate" }]} onAccessibilityTap={() => onSelect?.(handleSide, handleLine)} onAccessibilityAction={() => onSelect?.(handleSide, handleLine)}
+      onStartShouldSetResponder={() => !!onDragStart} onMoveShouldSetResponder={() => !!onDragStart} onResponderTerminationRequest={() => false}
+      onResponderGrant={(event) => { event.preventDefault(); const pageY = event.nativeEvent.pageY; onDragStart?.(row.path, handleSide, handleLine, pageY); }}
+      onResponderMove={(event) => { event.preventDefault(); const pageY = event.nativeEvent.pageY; onDragMove?.(pageY); }} onResponderRelease={() => onDragEnd?.()} onResponderTerminate={() => onDragEnd?.()}
+      style={{ ...nonSelectingStyle, width: SELECTION_HANDLE_WIDTH, height: lineHeight, flexShrink: 0, alignItems: "center", justifyContent: "center", opacity: handleActive || compact || Platform.OS !== "web" ? 1 : 0 }}>
+      <View pointerEvents="none" style={{ width: 18, height: 18, borderRadius: 3, backgroundColor: handleActive ? colors.statusSuccess : "transparent", alignItems: "center", justifyContent: "center" }}><Icon name="Plus" size={12} color={handleActive ? colors.surface0 : colors.statusSuccess} /></View>
+    </View>
+    {(["old", "new"] as const).map((side) => <Pressable key={side} accessibilityRole="button" accessibilityLabel={t("selectCodeLine", { path: row.path, line: side === "old" ? line.old ?? "" : line.next ?? "", side: t(side === "old" ? "versionOld" : "versionNew") })} disabled={!onSelect || (side === "old" ? line.old : line.next) === undefined} onPress={() => onSelect?.(side, (side === "old" ? line.old : line.next)!)} style={{ ...nonSelectingStyle, width: gutterCellWidth, minHeight: lineHeight, flexShrink: 0 }}><Text selectable={false} style={{ textAlign: "right", paddingRight: 6, lineHeight, color: selected ? colors.foreground : colors.foregroundMuted, fontFamily, fontSize: gutterFontSize, userSelect: "none" }}>{(side === "old" ? line.old : line.next) ?? ""}</Text></Pressable>)}
+    <Text selectable={false} style={{ width: markerWidth, flexShrink: 0, lineHeight, color: tone, fontFamily, fontSize, userSelect: "none" }}>{add ? "+" : remove ? "−" : " "}</Text>
     <Text selectable style={[
       { flex: 1, minWidth: 0, fontSize, lineHeight, fontFamily, color: colors.foreground },
       Platform.OS === "web" ? ({ whiteSpace: "pre-wrap", overflowWrap: "anywhere", wordBreak: "break-all" } as unknown as TextStyle) : null,

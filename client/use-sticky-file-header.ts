@@ -31,5 +31,5 @@ export function useStickyFileHeader(model: ReturnType<typeof reviewRows>, onActi
   }, [translateY]);
   useEffect(() => update(offset.current), [model, update]);
   const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => update(event.nativeEvent.contentOffset.y), [update]);
-  return { file, translateY, onScroll, scrollOffset: () => offset.current };
+  return { file, translateY, onScroll, scrollOffset: () => offset.current, reset: () => update(0) };
 }

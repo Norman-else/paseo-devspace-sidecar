@@ -1,4 +1,5 @@
 export const DEFAULT_MONO_FONT = "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
+export const SELECTION_HANDLE_WIDTH = 24;
 export type CodeAppearance = { fontFamily: string; fontSize: number; lineHeight: number; characterWidth: number; gutterFontSize: number; gutterCellWidth: number; markerWidth: number; gutterWidth: number };
 
 /** Follow saved Paseo code preferences, keeping this review at a readable 14px minimum. */
@@ -12,7 +13,7 @@ export function codeAppearance(value: unknown, fallback = DEFAULT_MONO_FONT): Co
   const gutterCellWidth = Math.max(32, Math.ceil(gutterFontSize * 0.62 * 4) + 6);
   const markerWidth = Math.ceil(fontSize * 0.62) + 6;
   return { fontFamily: safeFamily && family ? family : fallback, fontSize, lineHeight: Math.round(fontSize * 1.5), characterWidth: fontSize * 0.62,
-    gutterFontSize, gutterCellWidth, markerWidth, gutterWidth: 3 + gutterCellWidth * 2 + markerWidth };
+    gutterFontSize, gutterCellWidth, markerWidth, gutterWidth: 3 + SELECTION_HANDLE_WIDTH + gutterCellWidth * 2 + markerWidth };
 }
 
 function rgb(color: string): number[] | null {
