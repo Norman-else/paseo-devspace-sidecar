@@ -32,7 +32,7 @@ import { fileDiscussions, nextDiscussion } from "../shared/comment-navigation";
 const stateSchema = z.object({ comparison: comparisonSchema, scope: z.string().default(""), collapsed: z.array(z.string()).default([]), reviewed: z.record(z.string(), z.string()).default({}), indexWidth: z.number().min(140).max(520).nullable().default(null), prNumber: z.number().int().optional(), filter: z.enum(["all", "unreviewed", "since"]).default("all"), points: z.record(z.string(), checkpointSchema).default({}), view: z.enum(["changes", "comments"]).default("changes") });
 type Jump = { path: string; key?: string };
 export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
-  const { t, translateBackend } = useMessages(), toast = useToast();
+  const { t, translateBackend, locale } = useMessages(), toast = useToast();
   const typography = useCodeAppearance();
   const [state, save] = useTabState(tab, stateSchema, { comparison: "task" as const, scope: "", collapsed: [] as string[], reviewed: {} as Record<string, string>, indexWidth: null as number | null, filter: "all" as const, points: {}, view: "changes" as const });
   const latestState = useRef(state); latestState.current = state;
@@ -62,7 +62,9 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
   const view = pr ? state.view : "changes";
   const comparison: Snapshot["comparison"] = pr ? state.comparison === "local" ? "local" : "pr" : state.comparison === "uncommitted" ? "uncommitted" : "task";
   const scope = `${params.agentId}:${bound?.id}:${comparison}:${pr?.number ?? ""}`;
-  const point = state.points[scope], since = state.filter === "since" ? point?.id : undefined;
+  const point = state.points[scope];
+  const effectiveFilter = state.filter === "since" && !point ? "all" : state.filter;
+  const since = effectiveFilter === "since" ? point?.id : undefined;
   const request = { comparison, prNumber: pr?.number, since };
   const snapshot = useQuery({ queryKey: ["devspace-snapshot-v3", host.id, bound?.id, comparison, pr?.number, since], queryFn: () => snapshotCall({ workspaceId: bound!.id, ...request }), enabled: !!bound, refetchInterval: 3000, retry: false });
   const document = useQuery({ queryKey: ["devspace-review-v3", host.id, bound?.id, comparison, pr?.number, since, snapshot.data?.revision], queryFn: () => reviewCall({ workspaceId: bound!.id, ...request }), enabled: !!bound && !!snapshot.data, placeholderData: (previous) => previous && previous.snapshot.workspace.id === bound?.id && previous.snapshot.comparison === comparison && previous.snapshot.checkpoint?.id === since && previous.snapshot.prNumber === pr?.number ? previous : undefined, retry: 1, gcTime: 60000 });
@@ -154,7 +156,7 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
     if (!selection) return;
     const from = Math.min(selection.start, selection.end), to = Math.max(selection.start, selection.end);
     const snapshot = document.data?.snapshot;
-    const selectedVersion = selection.side === "old" && snapshot?.checkpoint ? t("reviewPointAt", { time: new Date(snapshot.checkpoint.createdAt).toLocaleString() }) : selection.side === "new" && comparison !== "pr" ? t("workingVersion") : selection.side === "old" ? snapshot?.ref : snapshot?.headSha;
+    const selectedVersion = selection.side === "old" && snapshot?.checkpoint ? t("baselineSavedAt", { time: new Date(snapshot.checkpoint.createdAt).toLocaleString(locale) }) : selection.side === "new" && comparison !== "pr" ? t("workingVersion") : selection.side === "old" ? snapshot?.ref : snapshot?.headSha;
     const title = t("selectionRange", { path: selection.path, side: t(selection.side === "old" ? "versionOld" : "versionNew"), from, to });
     setDraft({ title, instruction: t(kind === "explain" ? "explainInstruction" : "changeInstruction"), context: `${title}\n${source}\n${selectedVersion ?? ""}\n${snapshot?.capturedAt ?? ""}\n\n\`\`\`\n${selectedCode(model.rows, selection)}\n\`\`\`\n${t("selectionLimit")}` });
   };
@@ -188,7 +190,7 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
   const collapseAction = <ToolButton icon="ListCollapse" label={t(collapsed.size ? "expandAll" : "collapseAll")} colors={colors} touch={!wide} onPress={() => mutate({ collapsed: collapsed.size ? [] : files.map((f) => f.path) })} />;
   const refreshAction = <ToolButton icon="RefreshCw" label={t("refresh")} colors={colors} touch={!wide} onPress={refresh} />;
   const actions = <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>{bound ? <><ToolButton icon="Search" label={t("filterFiles")} colors={colors} touch={!wide} onPress={() => { setSearchOpen(!searchOpen); if (searchOpen) setSearch(""); setDetail(null); }} active={searchOpen} />{wide ? collapseAction : <ToolButton icon="List" label={t("openIndex")} colors={colors} touch active={indexOpen} onPress={() => setIndexOpen(!indexOpen)} />}</> : null}{wide || !bound ? refreshAction : null}</View>;
-  const optionAction = <ToolButton touch={!wide} icon="SlidersHorizontal" label={t("reviewOptions")} active={state.filter !== "all"} colors={colors} onPress={() => setOptionsOpen(true)} />;
+  const optionAction = <ToolButton touch={!wide} icon="SlidersHorizontal" label={t("reviewOptions")} active={effectiveFilter !== "all"} colors={colors} onPress={() => setOptionsOpen(true)} />;
   return <View style={{ flex: 1, minHeight: 0, backgroundColor: colors.surface0 }} testID="devspace-diff-panel" onLayout={(event) => { const width = event.nativeEvent.layout.width; if (width > 0) setSize((previous) => previous.width === width ? previous : { ...previous, width }); }}>
     {pr && header.mode === "pull-request" ? <PullRequestStatus result={pullRequests.data} loading={false} error={null} colors={colors} compact={!wide} selectedNumber={pr.number} onSelect={(prNumber) => { save({ ...state, prNumber, filter: "all", scope: "", reviewed: {}, collapsed: [] }); setDetail(null); }} onChecks={() => { changeView("changes"); setDetail(detail === "checks" ? null : "checks"); setSearchOpen(false); setSearch(""); }} expandedDetail={detail} />
       : <View style={{ paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 8 }}><Icon name={bound ? "GitBranch" : "FileDiff"} size={14} color={colors.foregroundMuted} /><Text style={{ color: colors.foreground, fontSize: 12, fontWeight: "600", flex: 1 }} numberOfLines={1}>{bound?.branch ?? t("codeReview")}</Text>{!bound ? actions : null}</View>}
@@ -203,7 +205,7 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
       onModeChange={(comparison) => { save({ ...state, comparison, filter: "all", scope: "", collapsed: [], reviewed: {} }); setSearch(""); }}>{actions}{wide ? optionAction : null}</ReviewToolbar> : null}
     {view === "changes" && pr && local.data && local.data.totalFiles > 0 && local.data.ref === document.data?.snapshot.headSha && comparison === "pr" && !since ? <Pressable accessibilityRole="button" onPress={() => save({ ...state, comparison: "local", filter: "all", scope: "", collapsed: [], reviewed: {} })} style={{ paddingHorizontal: 12, paddingVertical: 7, borderBottomWidth: 1, borderColor: colors.border }}><Text style={{ color: colors.statusWarning, fontSize: 11 }}>{t("localPending", { count: local.data.totalFiles })}</Text></Pressable> : null}
     {view === "changes" && pr && local.error && comparison === "pr" && !since ? <Text style={{ color: colors.foregroundMuted, paddingHorizontal: 12, paddingVertical: 6, fontSize: 11 }}>{t("localUnavailable")}</Text> : null}
-    {view === "changes" && state.filter !== "all" && bound ? <Pressable accessibilityRole="button" onPress={() => setOptionsOpen(true)} style={{ paddingHorizontal: 12, paddingVertical: 6 }}><Text style={{ color: colors.foregroundMuted, fontSize: 11 }}>{since && point ? t("reviewPointAt", { time: new Date(point.createdAt).toLocaleString() }) : t("unreviewedFiles")}</Text></Pressable> : null}
+    {view === "changes" && effectiveFilter !== "all" && bound ? <Pressable accessibilityRole="button" onPress={() => setOptionsOpen(true)} style={{ paddingHorizontal: 12, paddingVertical: 6 }}><Text style={{ color: colors.foregroundMuted, fontSize: 11 }}>{since && point ? t("reviewPointAt", { time: new Date(point.createdAt).toLocaleString(locale) }) : t("unreviewedFiles")}</Text></Pressable> : null}
     {view === "changes" && error ? <Text selectable style={{ color: colors.statusDanger, padding: 12, fontSize: 12 }}>{translateBackend(error.message)}</Text> : null}
     {view === "changes" && (catalog.isPending || (bound && !document.data && (snapshot.isPending || document.isPending))) ? <ActivityIndicator color={colors.foregroundMuted} style={{ margin: 20 }} /> : null}
     {!catalog.isPending && !bound ? <View style={{ padding: 20, gap: 8 }}><Text style={{ color: colors.foreground, fontSize: 13 }}>{t("noAssociation")}</Text><Text style={{ color: colors.foregroundMuted, fontSize: 12, lineHeight: 20 }}>{catalog.data?.inferenceError ? translateBackend(catalog.data.inferenceError) : t("noAssociationHelp")}</Text></View> : null}
@@ -231,7 +233,7 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
       </> : null}
     </View>
 
-    <ReviewOptions open={optionsOpen} onClose={() => setOptionsOpen(false)} filter={state.filter} point={point} busy={saving} onSave={() => void savePoint()} onFilter={(filter) => save({ ...state, filter })} colors={colors} />
+    <ReviewOptions open={optionsOpen} onClose={() => setOptionsOpen(false)} filter={effectiveFilter} scopeLabel={`${pr ? `PR #${pr.number}` : bound?.branch ?? t("codeReview")} · ${t(({ task: "taskChanges", uncommitted: "uncommitted", pr: "prChanges", local: "localChanges" } as const)[comparison])}`} prComparison={comparison === "pr"} point={point} busy={saving} onSave={() => void savePoint()} onFilter={(filter) => save({ ...state, filter })} colors={colors} />
     <FeedbackComposer draft={draft} agentId={params.agentId} colors={colors} onClose={() => setDraft(null)} />
   </View>;
 }
