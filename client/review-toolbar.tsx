@@ -15,10 +15,10 @@ export function ReviewToolbar({ mode, fileCount, reviewedCount, totals, searchOp
   const { t } = useMessages();
   const labels = { task: "taskChanges", uncommitted: "uncommitted", pr: "prChanges", local: "localChanges" } as const;
   const descriptions = { task: "taskScopeHelp", uncommitted: "uncommittedScopeHelp", pr: "prScopeHelp", local: "localScopeHelp" } as const;
-  const counts = <View style={{ flex: compact ? 1 : undefined, minWidth: 0, flexDirection: compact ? "column" : "row", alignItems: compact ? "flex-start" : "center", columnGap: 8, rowGap: 2 }}>
+  const counts = fileCount ? <View style={{ flex: compact ? 1 : undefined, minWidth: 0, flexDirection: compact ? "column" : "row", alignItems: compact ? "flex-start" : "center", columnGap: 8, rowGap: 2 }}>
     <Text numberOfLines={1} style={{ color: colors.foregroundMuted, fontSize: compact ? 12 : 11, lineHeight: 16 }}>{fileCount === undefined ? "" : t("files", { count: fileCount })}{reviewedCount ? t("reviewedCount", { count: reviewedCount }) : ""}</Text>
-    {totals ? <View style={{ flexDirection: "row", gap: 6 }}><Text style={{ color: colors.statusSuccess, fontSize: 11, lineHeight: 14 }}>+{totals.plus}</Text><Text style={{ color: colors.statusDanger, fontSize: 11, lineHeight: 14 }}>−{totals.minus}</Text></View> : null}
-  </View>;
+    {totals && (totals.plus > 0 || totals.minus > 0) ? <View style={{ flexDirection: "row", gap: 6 }}><Text style={{ color: colors.statusSuccess, fontSize: 11, lineHeight: 14 }}>+{totals.plus}</Text><Text style={{ color: colors.statusDanger, fontSize: 11, lineHeight: 14 }}>−{totals.minus}</Text></View> : null}
+  </View> : compact ? <View style={{ flex: 1 }} /> : null;
   return <View style={{ paddingHorizontal: 12, paddingVertical: 4, gap: 6, borderBottomWidth: 1, borderColor: colors.border, backgroundColor: colors.surface0, zIndex: 5 }} testID="devspace-review-toolbar">
     <View style={{ minHeight: compact ? 44 : 32, flexDirection: "row", alignItems: "center", gap: compact ? 8 : 10 }}>
       {modes.length > 1 ? <ReviewMenu title={t("comparisonRange")} label={t(labels[mode])} colors={colors} touch={compact} width={Math.min(280, availableWidth - 24)} options={modes.map((option) => ({ id: option, label: t(labels[option]), description: t(descriptions[option]), selected: mode === option, onSelect: () => { if (option !== mode) onModeChange(option); } }))} />

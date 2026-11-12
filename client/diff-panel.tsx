@@ -17,6 +17,8 @@ import { useCodeAppearance } from "./use-code-appearance";
 import { PullRequestStatus } from "./pull-request-status";
 import { reviewHeader } from "../shared/review-header";
 import { ReviewMenu } from "./review-menu";
+import { ReviewEmptyState } from "./review-empty-state";
+import { reviewEmptyKind } from "../shared/review-empty";
 import { ReviewToolbar } from "./review-toolbar";
 import { useStickyFileHeader } from "./use-sticky-file-header";
 import { Discussions, InlineDiscussion } from "./review-discussions";
@@ -88,11 +90,11 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
   const files = useMemo(() => allFiles.filter((file) => (!search || searchType !== "files" || file.path.toLowerCase().includes(search.toLowerCase())) && (state.filter !== "unreviewed" || !file.hash || reviewed[file.path] !== file.hash)), [allFiles, search, searchType, state.filter, reviewed]);
   const wide = size.width >= 560;
   const maxIndexWidth = Math.min(520, Math.max(140, size.width - 280 - DIVIDER_WIDTH));
-  const indexShown = wide && state.indexVisible;
+  const indexShown = wide && state.indexVisible && files.length > 0;
   const indexWidth = indexShown ? Math.max(140, Math.min(maxIndexWidth, dragWidth ?? state.indexWidth ?? Math.min(210, Math.max(150, size.width * 0.26)))) : 0;
   const viewportWidth = Math.max(100, size.width - indexWidth - (indexShown ? DIVIDER_WIDTH : 0));
   const scrollContent = useScrollContentWidth(viewportWidth), contentWidth = scrollContent.width;
-  useEffect(() => { if (wide) setIndexOpen(false); }, [wide]);
+  useEffect(() => { if (wide || !files.length) setIndexOpen(false); }, [wide, files.length]);
   const layoutKey = `${contentWidth}:${typography.fontFamily}:${typography.fontSize}:${version}`;
   const { heights, report } = useRowMeasurements(layoutKey);
   const inlineAvailable = comparison === "pr" && !since && !!discussions.data && !!document.data?.snapshot.headSha && discussions.data.headSha === document.data.snapshot.headSha;
@@ -129,6 +131,13 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
   const totals = snapshot.data?.files.reduce((sum, file) => ({ plus: sum.plus + (file.additions ?? 0), minus: sum.minus + (file.deletions ?? 0) }), { plus: 0, minus: 0 });
   const error = catalog.error ?? snapshot.error ?? document.error;
   const visibleError = error && !workspaceEmptyError(error) ? error : null;
+  const empty = document.data && !visibleError ? reviewEmptyKind({ comparison, totalFiles: document.data.snapshot.totalFiles, visibleFiles: files.length, search: searchType === "files" && !!search, unreviewed: effectiveFilter === "unreviewed", since: !!since }) : null;
+  const setComparison = (next: Snapshot["comparison"]) => { save({ ...state, comparison: next, filter: "all", scope: "", collapsed: [], reviewed: {} }); setSearch(""); };
+  const emptyAction = empty === "synced" ? { label: t("viewPrChanges"), onPress: () => setComparison("pr") }
+    : empty === "search" ? { label: t("clearFileSearch"), onPress: () => setSearch("") }
+    : empty === "reviewed" || empty === "baseline" || empty === "filtered" ? { label: t("showAllChanges"), onPress: () => { setSearch(""); save({ ...state, filter: "all" }); } }
+    : empty === "clean" && bound?.baseSha ? { label: t("viewTaskChanges"), onPress: () => setComparison("task") }
+    : { label: t("refresh"), onPress: refresh };
   const reviewedCount = allFiles.filter((file) => file.hash && reviewed[file.path] === file.hash).length;
   const selected = files.some((file) => file.path === activePath) ? activePath : files[0]?.path ?? "";
   const matches = useMemo(() => searchType === "code" && search.trim() ? model.rows.flatMap((row, index) => row.kind === "code" && row.line.text.toLowerCase().includes(search.toLowerCase()) ? [index] : []) : [], [model, search, searchType]);
@@ -216,13 +225,15 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
   const optionAction = <ToolButton touch={!wide} icon="SlidersHorizontal" label={t("reviewOptions")} active={effectiveFilter !== "all"} colors={colors} onPress={() => setOptionsOpen(true)} />;
   const toggleSearch = () => { setSearchOpen(!searchOpen); if (searchOpen) setSearch(""); };
   const searchAction = <ToolButton icon="Search" label={t("filterFiles")} colors={colors} touch={!wide} onPress={toggleSearch} active={searchOpen} />;
+  const canSearch = allFiles.length > 0 || searchOpen, canFilter = allFiles.length > 0 || effectiveFilter !== "all";
   const moreAction = <ReviewMenu title={t("moreReviewActions")} icon="Ellipsis" colors={colors} touch align="right" width={Math.min(280, size.width - 88)} options={[
-    ...(size.width < 380 ? [{ id: "search", label: t("filterFiles"), icon: "Search", onSelect: toggleSearch }] : []),
-    { id: "collapse", label: t(collapsed.size ? "expandAll" : "collapseAll"), icon: "ListCollapse", onSelect: () => mutate({ collapsed: collapsed.size ? [] : files.map((file) => file.path) }) },
-    { id: "filters", label: t("reviewOptions"), icon: "SlidersHorizontal", onSelect: () => setOptionsOpen(true) },
+    ...(size.width < 380 && canSearch ? [{ id: "search", label: t("filterFiles"), icon: "Search", onSelect: toggleSearch }] : []),
+    ...(files.length ? [{ id: "collapse", label: t(collapsed.size ? "expandAll" : "collapseAll"), icon: "ListCollapse", onSelect: () => mutate({ collapsed: collapsed.size ? [] : files.map((file) => file.path) }) }] : []),
+    ...(canFilter ? [{ id: "filters", label: t("reviewOptions"), icon: "SlidersHorizontal", onSelect: () => setOptionsOpen(true) }] : []),
     { id: "refresh", label: t("refresh"), icon: "RefreshCw", onSelect: refresh },
   ]} />;
-  const actions = <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>{bound ? wide ? <>{searchAction}{collapseAction}{refreshAction}{optionAction}{indexAction}</> : <>{size.width >= 380 ? searchAction : null}{moreAction}{indexAction}</> : refreshAction}</View>;
+  const actions = <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>{bound ? wide ? <>{canSearch ? searchAction : null}{files.length ? collapseAction : null}{refreshAction}{canFilter ? optionAction : null}{files.length ? indexAction : null}</>
+    : !canSearch && !canFilter && !files.length ? refreshAction : <>{canSearch && size.width >= 380 ? searchAction : null}{moreAction}{files.length ? indexAction : null}</> : refreshAction}</View>;
   return <View style={{ flex: 1, minHeight: 0, backgroundColor: colors.surface0 }} testID="devspace-diff-panel" onLayout={(event) => { const width = event.nativeEvent.layout.width; if (width > 0) setSize((previous) => previous.width === width ? previous : { ...previous, width }); }}>
     {pr && header.mode === "pull-request" ? <PullRequestStatus result={pullRequests.data} loading={false} error={null} colors={colors} compact={!wide} selectedNumber={pr.number} onSelect={(prNumber) => save({ ...state, prNumber, filter: "all", scope: "", reviewed: {}, collapsed: [] })} workspaceId={bound?.id} maxChecksHeight={size.height} maxChecksWidth={size.width - 24} onCheckFeedback={checkFeedback} />
       : <View style={{ paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 8 }}><Icon name={bound ? "GitBranch" : "FileDiff"} size={14} color={colors.foregroundMuted} /><Text style={{ color: colors.foreground, fontSize: 12, fontWeight: "600", flex: 1 }} numberOfLines={1}>{bound?.branch ?? t("codeReview")}</Text>{!bound ? actions : null}</View>}
@@ -233,7 +244,7 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
     </View> : null}
     {bound && view === "changes" ? <ReviewToolbar mode={comparison} modes={pr ? ["pr", "local"] : bound.baseSha ? ["task", "uncommitted"] : ["uncommitted"]} fileCount={snapshot.data?.totalFiles} reviewedCount={reviewedCount} totals={totals} compact={!wide} availableWidth={size.width}
       searchOpen={searchOpen} search={search} colors={colors} onSearchChange={setSearch} searchType={searchType} onSearchType={(type) => { setSearchType(type); setSearch(""); }} matchCount={matches.length} matchIndex={matchIndex} onMatch={match}
-      onModeChange={(comparison) => { save({ ...state, comparison, filter: "all", scope: "", collapsed: [], reviewed: {} }); setSearch(""); }}>{actions}</ReviewToolbar> : null}
+      onModeChange={setComparison}>{actions}</ReviewToolbar> : null}
     {view === "changes" && pr && local.data && local.data.totalFiles > 0 && local.data.ref === document.data?.snapshot.headSha && comparison === "pr" && !since ? <Pressable accessibilityRole="button" onPress={() => save({ ...state, comparison: "local", filter: "all", scope: "", collapsed: [], reviewed: {} })} style={{ paddingHorizontal: 12, paddingVertical: 7, borderBottomWidth: 1, borderColor: colors.border }}><Text style={{ color: colors.statusWarning, fontSize: 11 }}>{t("localPending", { count: local.data.totalFiles })}</Text></Pressable> : null}
     {view === "changes" && pr && local.error && comparison === "pr" && !since ? <Text style={{ color: colors.foregroundMuted, paddingHorizontal: 12, paddingVertical: 6, fontSize: 11 }}>{t("localUnavailable")}</Text> : null}
     {view === "changes" && effectiveFilter !== "all" && bound ? <Pressable accessibilityRole="button" onPress={() => setOptionsOpen(true)} style={{ paddingHorizontal: 12, paddingVertical: 6 }}><Text style={{ color: colors.foregroundMuted, fontSize: 11 }}>{since && point ? t("reviewPointAt", { time: new Date(point.createdAt).toLocaleString(locale) }) : t("unreviewedFiles")}</Text></Pressable> : null}
@@ -245,11 +256,10 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
       const height = event.nativeEvent.layout.height;
       if (view === "changes" && height > 0) setSize((previous) => previous.height === height ? previous : { ...previous, height });
     }}>
-      {document.data && bound ? <>
+      {empty && bound ? <ReviewEmptyState kind={empty} colors={colors} compact={!wide} action={emptyAction} /> : document.data && bound ? <>
         <View testID="devspace-code-viewport" ref={codeSelection.viewport} onLayout={codeSelection.measureViewport} style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: "hidden", backgroundColor: reviewColors.surface0 }}>
           <FlatList<ReviewRow> testID="devspace-code-list" ref={list} data={model.rows} ListHeaderComponent={scrollContent.sizer} contentContainerStyle={{ paddingRight: SCROLLBAR_CLEARANCE }} style={[stableScrollbarStyle, { flex: 1, width: viewportWidth, height: size.height }]} keyExtractor={(row) => row.key} initialNumToRender={55} maxToRenderPerBatch={55} windowSize={9}
             getItemLayout={(_, index) => ({ length: model.rows[index]?.height ?? 20, offset: model.offsets[index] ?? 0, index })} scrollEnabled={!codeSelection.dragging} onScroll={(event) => { if (view === "changes") { const offset = event.nativeEvent.contentOffset.y; sticky.onScroll(event); codeSelection.onScroll(offset); } }} scrollEventThrottle={16}
-            ListEmptyComponent={<Text style={{ color: colors.foregroundMuted, padding: 20, fontSize: 12 }}>{t(search ? "noMatches" : since ? "emptyCheckpoint" : "noChanges")}</Text>}
             renderItem={({ item: row }) => row.kind === "header" ? <FileHeader {...commentProps(row.file)} file={row.file} width={contentWidth} colors={reviewColors} collapsed={collapsed.has(row.path)} reviewed={!!row.file.hash && reviewed[row.path] === row.file.hash} onToggle={() => toggle(row.path)} onReview={() => mark(row.file)} />
               : row.kind === "code" ? <CodeLine compact={!wide} onDragStart={codeSelection.start} onDragMove={codeSelection.move} onDragEnd={codeSelection.end} row={row} colors={reviewColors} typography={typography} selectionScope={version} selection={selection} match={searchType === "code" && !!search && row.line.text.toLowerCase().includes(search.toLowerCase())} onSelect={(side, line) => { if (!selection) toast.show(t("selectionHint")); setSelection((previous) => selectLine(previous, row.path, side, line)); }} onHeight={(height) => report(row.key, height, layoutKey)} />
               : row.kind === "thread" ? <InlineDiscussion thread={row.thread} expanded={expandedThreads.has(row.thread.id)} onToggle={() => toggleThread(row.thread.id)} colors={reviewColors} onFeedback={threadFeedback} onHeight={(height) => report(row.key, height, layoutKey)} />
