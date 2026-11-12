@@ -4,6 +4,7 @@ export const en = {
   filterFiles: "Filter files", filterPlaceholder: "Filter files…", expandAll: "Expand all files", collapseAll: "Collapse all files",
   showFileList: "Show file list", hideFileList: "Hide file list",
   openIndex: "Open file index", closeIndex: "Close file index", changedFiles: "Changed files", refresh: "Refresh review",
+  noReviewableWorkspace: "No Git workspace linked for review", notGitWorkspace: "DevSpace’s current target is not a Git repository. Review will appear when DevSpace targets a Git workspace.", missingWorkspace: "This session’s code workspace is no longer available.", noCommitsWorkspace: "This Git repository has no commits yet. Review will be available after the first commit.", nestedWorkspace: "This session uses a subfolder of a Git repository. Open the repository root with DevSpace to review its changes.", workspaceAccessFailed: "Unable to access the DevSpace workspace folder.", workspaceGitFailed: "Unable to read the DevSpace Git workspace.",
   noAssociation: "No DevSpace workspace for this session", noAssociationHelp: "Open this panel in a task that uses DevSpace. Its changes will appear automatically.",
   noMatches: "No matching files", noChanges: "No file changes in this comparison", unchangedLines: "{{count}} unmodified lines", context: "Context",
   loadFile: "Load this file's diff", loadFileLabel: "Load diff for {{path}}", newFile: "New", expandFile: "Expand {{path}}", collapseFile: "Collapse {{path}}",
@@ -54,6 +55,7 @@ export const zh: Record<keyof typeof en, string> = {
   filterFiles: "筛选文件", filterPlaceholder: "筛选文件…", expandAll: "展开所有文件", collapseAll: "折叠所有文件",
   showFileList: "显示文件列表", hideFileList: "隐藏文件列表",
   openIndex: "打开文件索引", closeIndex: "关闭文件索引", changedFiles: "变更文件", refresh: "刷新审阅",
+  noReviewableWorkspace: "尚未关联到可审阅的 Git 工作区", notGitWorkspace: "DevSpace 当前操作的目标目录不是 Git 仓库。关联到具体 Git 工作区后，代码改动会自动显示。", missingWorkspace: "当前会话的代码工作区已不可用。", noCommitsWorkspace: "这个 Git 仓库还没有提交。创建首次提交后，即可查看代码改动。", nestedWorkspace: "当前会话使用的是 Git 仓库的子目录。请通过 DevSpace 打开仓库根目录查看改动。", workspaceAccessFailed: "暂时无法访问 DevSpace 工作区目录。", workspaceGitFailed: "暂时无法读取 DevSpace Git 工作区。",
   noAssociation: "当前会话未关联 DevSpace", noAssociationHelp: "在使用 DevSpace 修改代码的任务会话中打开，改动会自动显示。",
   noMatches: "没有匹配的文件", noChanges: "这个范围内没有文件改动", unchangedLines: "{{count}} 行未修改", context: "上下文",
   loadFile: "点击加载此文件差异", loadFileLabel: "加载差异 {{path}}", newFile: "新建", expandFile: "展开文件 {{path}}", collapseFile: "折叠文件 {{path}}",
@@ -102,6 +104,12 @@ export const zh: Record<keyof typeof en, string> = {
 };
 
 export const backendMessages = {
+  "This DevSpace folder is not a Git repository.": "notGitWorkspace",
+  "This DevSpace folder is no longer available.": "missingWorkspace",
+  "This Git repository has no commits yet.": "noCommitsWorkspace",
+  "This DevSpace folder is not the root of a Git repository.": "nestedWorkspace",
+  "Unable to access the DevSpace workspace folder.": "workspaceAccessFailed",
+  "Unable to read the DevSpace Git workspace.": "workspaceGitFailed",
   "GitHub did not provide a text patch for this file.": "prPatchMissing",
   "PR changed while loading. Refresh and try again.": "prMoved",
   "File is too large or binary for contextual review.": "contextOversize",

@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRpc, useTabState, type PluginAgentPanelProps } from "@getpaseo/plugin/client";
 import { FlatList, Icon, copyText, useToast } from "@getpaseo/plugin/client/ui";
 import { z } from "zod";
-import { catalogRpc, comparison as comparisonSchema, contextRpc, checkpointRpc, threadsRpc, fileRpc, pullRequestRpc, reviewRpc, snapshotRpc, type ReviewFile, type Snapshot } from "../shared/diff";
+import { catalogRpc, comparison as comparisonSchema, contextRpc, checkpointRpc, threadsRpc, fileRpc, pullRequestRpc, reviewRpc, snapshotRpc, workspaceEmptyError, workspaceEmptyMessages, type WorkspaceEmptyReason, type ReviewFile, type Snapshot } from "../shared/diff";
 import { checkpointSchema, type ReviewThread } from "../shared/review-details";
 import { HEADER_HEIGHT, reviewRows, type ReviewRow, type ReviewExtras } from "../shared/review";
 import { selectedCode, selectLine } from "../shared/selection";
@@ -55,12 +55,15 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
   useEffect(() => installSelectionCursor(colors.foreground, codePalette.background), [colors.foreground, codePalette.background]);
   const catalogCall = useRpc(catalogRpc), snapshotCall = useRpc(snapshotRpc), reviewCall = useRpc(reviewRpc), fileCall = useRpc(fileRpc), prCall = useRpc(pullRequestRpc), threadsCall = useRpc(threadsRpc), contextCall = useRpc(contextRpc), checkpointCall = useRpc(checkpointRpc);
   const catalog = useQuery({ queryKey: ["devspace-context-v2", host.id, params.agentId], queryFn: () => catalogCall({ agentId: params.agentId }), refetchInterval: 15000, retry: false });
-  const bound = catalog.data?.workspace;
+  const [rejected, setRejected] = useState<{ id: string; reason: WorkspaceEmptyReason; at: number } | null>(null);
+  const rejectedReason = rejected?.id === catalog.data?.workspace?.id && rejected && catalog.dataUpdatedAt <= rejected.at ? rejected.reason : undefined;
+  const bound = rejectedReason ? null : catalog.data?.workspace;
+  const emptyReason = rejectedReason ?? catalog.data?.emptyReason;
   const pullRequests = useQuery({ queryKey: ["devspace-pull-requests", host.id, bound?.id, bound?.branch], queryFn: () => prCall({ workspaceId: bound!.id }), enabled: !!bound, refetchInterval: 30000, staleTime: 10000, retry: false });
   const result = pullRequests.data?.status === "available" ? pullRequests.data : null;
   const pr = result?.pullRequests.find((pr) => pr.number === state.prNumber) ?? result?.pullRequests[0];
   const view = pr ? state.view : "changes";
-  const comparison: Snapshot["comparison"] = pr ? state.comparison === "local" ? "local" : "pr" : state.comparison === "uncommitted" ? "uncommitted" : "task";
+  const comparison: Snapshot["comparison"] = pr ? state.comparison === "local" ? "local" : "pr" : state.comparison === "uncommitted" || !bound?.baseSha ? "uncommitted" : "task";
   const scope = `${params.agentId}:${bound?.id}:${comparison}:${pr?.number ?? ""}`;
   const point = state.points[scope];
   const effectiveFilter = state.filter === "since" && !point ? "all" : state.filter;
@@ -70,6 +73,12 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
   const document = useQuery({ queryKey: ["devspace-review-v3", host.id, bound?.id, comparison, pr?.number, since, snapshot.data?.revision], queryFn: () => reviewCall({ workspaceId: bound!.id, ...request }), enabled: !!bound && !!snapshot.data, placeholderData: (previous) => previous && previous.snapshot.workspace.id === bound?.id && previous.snapshot.comparison === comparison && previous.snapshot.checkpoint?.id === since && previous.snapshot.prNumber === pr?.number ? previous : undefined, retry: 1, gcTime: 60000 });
   const local = useQuery({ queryKey: ["devspace-local-v3", host.id, bound?.id, pr?.number, pr?.headSha], queryFn: () => snapshotCall({ workspaceId: bound!.id, comparison: "local", prNumber: pr!.number }), enabled: !!bound && !!pr, refetchInterval: 10000, retry: false });
   const discussions = useQuery({ queryKey: ["devspace-discussions", host.id, bound?.id, pr?.number, pr?.headSha], queryFn: () => threadsCall({ workspaceId: bound!.id, prNumber: pr!.number }), enabled: !!bound && !!pr, refetchInterval: 30000, retry: false });
+  useEffect(() => {
+    // A freshly verified workspace may recover from an older cached terminal error.
+    const failed = [snapshot, document, pullRequests, local, discussions].find((query) => query.errorUpdatedAt >= catalog.dataUpdatedAt && workspaceEmptyError(query.error));
+    const reason = workspaceEmptyError(failed?.error);
+    if (bound && reason) setRejected({ id: bound.id, reason, at: Date.now() });
+  }, [bound, catalog.dataUpdatedAt, snapshot.error, snapshot.errorUpdatedAt, document.error, document.errorUpdatedAt, pullRequests.error, pullRequests.errorUpdatedAt, local.error, local.errorUpdatedAt, discussions.error, discussions.errorUpdatedAt]);
   useEffect(() => { if (pr && document.data?.snapshot.headSha && document.data.snapshot.headSha !== pr.headSha) void pullRequests.refetch(); }, [document.data?.snapshot.headSha, pr?.headSha]);
   const version = `${scope}:${since ?? ""}:${document.data?.snapshot.revision ?? ""}`;
   const collapsed = useMemo(() => new Set(state.scope === scope ? state.collapsed : []), [state.collapsed, state.scope, scope]);
@@ -117,6 +126,7 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
   const refresh = () => { void catalog.refetch(); if (bound) { void snapshot.refetch(); void pullRequests.refetch(); if (snapshot.data) void document.refetch(); if (pr) { void discussions.refetch(); void local.refetch(); } } };
   const totals = snapshot.data?.files.reduce((sum, file) => ({ plus: sum.plus + (file.additions ?? 0), minus: sum.minus + (file.deletions ?? 0) }), { plus: 0, minus: 0 });
   const error = catalog.error ?? snapshot.error ?? document.error;
+  const visibleError = error && !workspaceEmptyError(error) ? error : null;
   const reviewedCount = allFiles.filter((file) => file.hash && reviewed[file.path] === file.hash).length;
   const selected = files.some((file) => file.path === activePath) ? activePath : files[0]?.path ?? "";
   const matches = useMemo(() => searchType === "code" && search.trim() ? model.rows.flatMap((row, index) => row.kind === "code" && row.line.text.toLowerCase().includes(search.toLowerCase()) ? [index] : []) : [], [model, search, searchType]);
@@ -211,15 +221,15 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
       {discussions.isPending ? <ActivityIndicator color={colors.foregroundMuted} style={{ margin: 20 }} /> : discussions.error ? <Pressable accessibilityRole="button" onPress={() => void discussions.refetch()} style={{ padding: 16 }}><Text style={{ color: colors.statusDanger, fontSize: 13 }}>{t("prUnavailable")} · {t("retry")}</Text></Pressable> : <Discussions threads={discussions.data?.threads ?? []} resolved={showResolved} onResolved={setShowResolved} onJump={jumpThread} onFeedback={threadFeedback} colors={colors} inlineAvailable={!!inlineAvailable} truncated={!!discussions.data?.truncated} />}
     </View> : null}
     {pr && bound && view === "changes" && detail === "checks" ? <View><View style={{ flexDirection: "row", alignItems: "center", paddingLeft: 12 }}><Text style={{ flex: 1, color: colors.foreground, fontSize: 12, fontWeight: "500" }}>{t("checks")}</Text><ToolButton touch={!wide} icon="X" label={t("closeDetails")} colors={colors} onPress={() => setDetail(null)} /></View><ReviewChecks workspaceId={bound.id} number={pr.number} headSha={pr.headSha} checks={pr.checks} colors={colors} onFeedback={(check) => setDraft({ title: check.name, instruction: t("changeInstruction"), context: `PR #${pr.number} · ${check.headSha ?? pr.headSha}\n${check.name}\n${check.url ?? ""}\n\n${check.summary}\n\n${check.excerpt}` })} /></View> : null}
-    {bound && view === "changes" ? <ReviewToolbar mode={comparison} modes={pr ? ["pr", "local"] : ["task", "uncommitted"]} fileCount={snapshot.data?.totalFiles} reviewedCount={reviewedCount} totals={totals} compact={!wide}
+    {bound && view === "changes" ? <ReviewToolbar mode={comparison} modes={pr ? ["pr", "local"] : bound.baseSha ? ["task", "uncommitted"] : ["uncommitted"]} fileCount={snapshot.data?.totalFiles} reviewedCount={reviewedCount} totals={totals} compact={!wide}
       secondaryActions={!wide ? <View style={{ flexDirection: "row", gap: 2 }}>{optionAction}{refreshAction}</View> : undefined} searchOpen={searchOpen} search={search} colors={colors} onSearchChange={setSearch} searchType={searchType} onSearchType={(type) => { setSearchType(type); setSearch(""); }} matchCount={matches.length} matchIndex={matchIndex} onMatch={match}
       onModeChange={(comparison) => { save({ ...state, comparison, filter: "all", scope: "", collapsed: [], reviewed: {} }); setSearch(""); }}>{actions}</ReviewToolbar> : null}
     {view === "changes" && pr && local.data && local.data.totalFiles > 0 && local.data.ref === document.data?.snapshot.headSha && comparison === "pr" && !since ? <Pressable accessibilityRole="button" onPress={() => save({ ...state, comparison: "local", filter: "all", scope: "", collapsed: [], reviewed: {} })} style={{ paddingHorizontal: 12, paddingVertical: 7, borderBottomWidth: 1, borderColor: colors.border }}><Text style={{ color: colors.statusWarning, fontSize: 11 }}>{t("localPending", { count: local.data.totalFiles })}</Text></Pressable> : null}
     {view === "changes" && pr && local.error && comparison === "pr" && !since ? <Text style={{ color: colors.foregroundMuted, paddingHorizontal: 12, paddingVertical: 6, fontSize: 11 }}>{t("localUnavailable")}</Text> : null}
     {view === "changes" && effectiveFilter !== "all" && bound ? <Pressable accessibilityRole="button" onPress={() => setOptionsOpen(true)} style={{ paddingHorizontal: 12, paddingVertical: 6 }}><Text style={{ color: colors.foregroundMuted, fontSize: 11 }}>{since && point ? t("reviewPointAt", { time: new Date(point.createdAt).toLocaleString(locale) }) : t("unreviewedFiles")}</Text></Pressable> : null}
-    {view === "changes" && error ? <Text selectable style={{ color: colors.statusDanger, padding: 12, fontSize: 12 }}>{translateBackend(error.message)}</Text> : null}
-    {view === "changes" && (catalog.isPending || (bound && !document.data && (snapshot.isPending || document.isPending))) ? <ActivityIndicator color={colors.foregroundMuted} style={{ margin: 20 }} /> : null}
-    {!catalog.isPending && !bound ? <View style={{ padding: 20, gap: 8 }}><Text style={{ color: colors.foreground, fontSize: 13 }}>{t("noAssociation")}</Text><Text style={{ color: colors.foregroundMuted, fontSize: 12, lineHeight: 20 }}>{catalog.data?.inferenceError ? translateBackend(catalog.data.inferenceError) : t("noAssociationHelp")}</Text></View> : null}
+    {view === "changes" && visibleError ? <View style={{ padding: 16, gap: 12 }}><Text selectable style={{ color: colors.statusDanger, fontSize: 13 }}>{translateBackend(visibleError.message)}</Text><Pressable accessibilityRole="button" onPress={refresh} style={{ alignSelf: "flex-start", paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 6 }}><Text style={{ color: colors.foreground, fontSize: 13 }}>{t("retry")}</Text></Pressable></View> : null}
+    {view === "changes" && !visibleError && (catalog.isLoading || (bound && !document.data && (snapshot.isFetching || document.isFetching))) ? <ActivityIndicator color={colors.foregroundMuted} style={{ margin: 20 }} /> : null}
+    {!catalog.isPending && !bound && !visibleError ? <View style={{ padding: 20, gap: 8 }}><Text style={{ color: colors.foreground, fontSize: 13 }}>{t(emptyReason ? "noReviewableWorkspace" : "noAssociation")}</Text><Text style={{ color: colors.foregroundMuted, fontSize: 13, lineHeight: 20 }}>{emptyReason ? translateBackend(workspaceEmptyMessages[emptyReason]) : catalog.data?.inferenceError ? translateBackend(catalog.data.inferenceError) : t("noAssociationHelp")}</Text></View> : null}
     <View style={{ flex: 1, minHeight: 0, flexDirection: "row", display: view === "changes" ? "flex" : "none" }} onLayout={(event) => {
       // Native synthetic events can be recycled before React runs this updater.
       const height = event.nativeEvent.layout.height;

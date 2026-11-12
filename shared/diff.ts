@@ -10,6 +10,22 @@ export const workspaceSchema = z.object({
   baseSha: z.string().nullable(), branch: z.string().nullable(), lastUsedAt: z.string(),
 });
 export type Workspace = z.infer<typeof workspaceSchema>;
+export const workspaceEmptyReason = z.enum(["not_git", "missing", "no_commits", "not_root"]);
+export type WorkspaceEmptyReason = z.infer<typeof workspaceEmptyReason>;
+export const workspaceInspectionSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("ready"), workspace: workspaceSchema }),
+  z.object({ status: z.literal("empty"), reason: workspaceEmptyReason }),
+]);
+export const workspaceEmptyMessages: Record<WorkspaceEmptyReason, string> = {
+  not_git: "This DevSpace folder is not a Git repository.",
+  missing: "This DevSpace folder is no longer available.",
+  no_commits: "This Git repository has no commits yet.",
+  not_root: "This DevSpace folder is not the root of a Git repository.",
+};
+export function workspaceEmptyError(error: unknown): WorkspaceEmptyReason | undefined {
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  return (Object.keys(workspaceEmptyMessages) as WorkspaceEmptyReason[]).find((reason) => message.includes(workspaceEmptyMessages[reason]));
+}
 export const fileSchema = z.object({
   path: z.string(), oldPath: z.string().optional(), status: z.string(),
   additions: z.number().nullable(), deletions: z.number().nullable(), binary: z.boolean(),
@@ -29,7 +45,7 @@ export const reviewSchema = z.object({ snapshot: snapshotSchema, files: z.array(
 export type Review = z.infer<typeof reviewSchema>;
 export const catalogRpc = defineRpc({
   name: "diff.catalog", input: z.object({ agentId: z.string().min(1) }),
-  output: z.object({ workspace: workspaceSchema.nullable(), inferenceError: z.string().optional() }),
+  output: z.object({ workspace: workspaceSchema.nullable(), emptyReason: workspaceEmptyReason.optional(), inferenceError: z.string().optional() }),
 });
 export const snapshotRpc = defineRpc({
   name: "diff.snapshot", input: z.object({ workspaceId, comparison, ...reviewOptions }), output: snapshotSchema,
@@ -46,6 +62,7 @@ export const checkpointRpc = defineRpc({ name: "diff.checkpoint", input: z.objec
 // Project operations stay read-only; checkpoints write only private sidecar state.
 export const bridgeRequest = z.discriminatedUnion("op", [
   z.object({ op: z.literal("catalog") }),
+  z.object({ op: z.literal("inspect"), workspaceId }),
   z.object({ op: z.literal("snapshot"), workspaceId, comparison, ...reviewOptions }),
   z.object({ op: z.literal("review"), workspaceId, comparison, ...reviewOptions }),
   z.object({ op: z.literal("pull-requests"), workspaceId }),
@@ -79,7 +96,8 @@ export function devspaceWorkspaceIds(timeline: unknown): string[] {
     if (!value || typeof value !== "object") return;
     const item = value as Record<string, unknown>;
     const name = String(item.name ?? item.toolName ?? item.tool_name ?? "");
-    if (item.type === "tool_call" && /devspace/i.test(name) && (!item.status || item.status === "completed" || item.status === "succeeded") && !item.isError) {
+    if (item.type === "tool_call") {
+      if (!/devspace/i.test(name) || item.status && item.status !== "completed" && item.status !== "succeeded" || item.isError) return;
       const detail = item.detail as Record<string, unknown> | undefined;
       const input = detail?.input ?? item.input ?? item.arguments;
       const ids = workspaceFields(input);
@@ -109,5 +127,6 @@ function workspaceFields(value: unknown): string[] {
 }
 export function suggestedWorkspace(timeline: unknown, workspaces: Workspace[]): string | null {
   const allowed = new Set(workspaces.map((w) => w.id));
-  return devspaceWorkspaceIds(timeline).filter((id) => allowed.has(id)).at(-1) ?? null;
+  const latest = devspaceWorkspaceIds(timeline).at(-1);
+  return latest && allowed.has(latest) ? latest : null;
 }

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rename, rm, symlink, unlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -12,7 +12,7 @@ import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { LocalDiff } from "../server/git.ts";
 import { remoteRequest, startBridge } from "../server/bridge.ts";
-import { diffLines, suggestedWorkspace, type Workspace } from "../shared/diff.ts";
+import { diffLines, suggestedWorkspace, workspaceEmptyError, type Workspace } from "../shared/diff.ts";
 import { reviewRows } from "../shared/review.ts";
 import { codeTokens } from "../shared/syntax.ts";
 import { en, zh } from "../shared/messages.ts";
@@ -41,6 +41,36 @@ async function fixture() {
   await writeFile(join(root, ".git", "info", "exclude"), "registry.sqlite*\n");
   return { root, git, base, service: new LocalDiff(dbPath), cleanup: () => rm(root, { recursive: true, force: true }) };
 }
+
+test("workspace inspection separates unsupported folders from a clean reviewable checkout", async () => {
+  const f = await fixture();
+  const db = new DatabaseSync(join(f.root, "registry.sqlite"));
+  const register = (id: string, root: string, base: string | null = null) => db.prepare("INSERT INTO workspace_sessions VALUES(?,?,?,?,?,?,?)").run(id, root, root, "checkout", base, new Date().toISOString(), "active");
+  try {
+    const plain = join(f.root, "plain"), nested = join(f.root, "nested"), unborn = join(f.root, "unborn");
+    await mkdir(nested); await mkdir(unborn);
+    // An independent folder is outside the fixture's Git checkout.
+    const outside = await mkdtemp(join(tmpdir(), "paseo-sidecar-plain-"));
+    try {
+      register("ws_plain", outside); register("ws_missing", plain); register("ws_nested", nested); register("ws_unborn", unborn); register("ws_clean", f.root);
+      await exec("git", ["-C", unborn, "init", "-b", "new"]);
+      for (const [id, reason] of [["ws_plain", "not_git"], ["ws_missing", "missing"], ["ws_nested", "not_root"], ["ws_unborn", "no_commits"], ["ws_unknown", "missing"]] as const) {
+        assert.deepEqual(await f.service.dispatch({ op: "inspect", workspaceId: id }), { status: "empty", reason });
+        await assert.rejects(() => f.service.snapshot(id, "uncommitted"), (error) => workspaceEmptyError(error) === reason && !String(error).includes("Command failed"));
+      }
+      assert.equal((await f.service.inspect("ws_clean")).status, "ready");
+      // Ignore the fixture's deliberately created child repository.
+      await writeFile(join(f.root, ".git", "info", "exclude"), "registry.sqlite*\nunborn/\n");
+      const review = await f.service.review("ws_clean", "uncommitted");
+      assert.equal(review.snapshot.workspace.baseSha, null);
+      assert.equal(review.snapshot.totalFiles, 0);
+      assert.deepEqual(review.files, []);
+      await rm(join(f.root, ".git"), { recursive: true, force: true });
+      assert.deepEqual(await f.service.inspect("ws_clean"), { status: "empty", reason: "not_git" });
+      await assert.rejects(() => f.service.pullRequests("ws_clean"), (error) => workspaceEmptyError(error) === "not_git");
+    } finally { await rm(outside, { recursive: true, force: true }); }
+  } finally { db.close(); await f.cleanup(); }
+});
 
 test("reads staged, unstaged, deleted, renamed, untracked and binary files without changing Git's index", async () => {
   const f = await fixture();
@@ -88,7 +118,7 @@ test("task comparison survives commits and refresh detects same-count edits", as
 test("limits file access to registered workspaces and current changed paths; previews symlinks as links", async (t) => {
   const f = await fixture();
   try {
-    await assert.rejects(() => f.service.snapshot("ws_unknown", "task"), /unavailable/);
+    await assert.rejects(() => f.service.snapshot("ws_unknown", "task"), (error) => workspaceEmptyError(error) === "missing");
     await assert.rejects(() => f.service.file("ws_test", "task", "../private"), /Invalid/);
     await assert.rejects(() => f.service.file("ws_test", "task", "/etc/passwd"), /Invalid/);
     await assert.rejects(() => f.service.file("ws_test", "task", "unchanged.txt"), /changed-file list/);
@@ -123,6 +153,9 @@ test("remote sources route Windows and Mac workspaces independently and tolerate
     const router = new RemoteSources([...sources, { endpoint: "http://127.0.0.1:9", token: "o".repeat(40) }]);
     const catalog = await router.request({ op: "catalog" }) as Workspace[];
     assert.deepEqual(catalog.map((workspace) => workspace.id).sort(), ["ws_test", "ws_windows"]);
+    const inspected = await router.request({ op: "inspect", workspaceId: "ws_test" }) as { status: string; workspace: Workspace };
+    assert.equal(inspected.status, "ready");
+    assert.equal(inspected.workspace.root, mac.root, "a VPS router inspects the project host's Git root rather than its own cwd");
     const patch = await router.request({ op: "file", workspaceId: "ws_windows", comparison: "task", path: "change.txt" }) as { patch: string };
     assert.match(patch.patch, /Windows project/); assert.doesNotMatch(patch.patch, /Mac project/);
     const db = new DatabaseSync(join(windows.root, "registry.sqlite"));
@@ -179,6 +212,11 @@ test("agent binding ignores prose and other agents' guessed names; unified lines
     { type: "tool_call", name: "mcp__devspace__open_workspace", result: { workspace_id: "ws_checkout" } },
     { type: "tool_call", name: "mcp__devspace__bash", input: { workspace_id: "ws_task" } },
   ], workspaces), "ws_task");
+  assert.equal(suggestedWorkspace([
+    { type: "tool_call", name: "mcp__devspace__bash", input: { workspace_id: "ws_task" } },
+    { type: "tool_call", name: "mcp__devspace__open_workspace", result: { workspace_id: "ws_removed" } },
+  ], workspaces), null, "never fall back to an older workspace when the latest one is gone");
+  assert.equal(suggestedWorkspace([{ type: "tool_call", name: "unrelated_tool", result: { nested: { type: "tool_call", name: "mcp__devspace__bash", input: { workspace_id: "ws_task" } } } }], workspaces), null);
   const rows = diffLines("--- a/a\n+++ b/a\n@@ -5,2 +8,2 @@\n-old\n+new\n same\n");
   assert.deepEqual(rows[3], { kind: "remove", text: "-old", old: 5 });
   assert.deepEqual(rows[4], { kind: "add", text: "+new", next: 8 });

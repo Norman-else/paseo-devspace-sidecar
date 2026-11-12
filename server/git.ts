@@ -6,6 +6,7 @@ import { homedir } from "node:os";
 import { DatabaseSync } from "node:sqlite";
 import { promisify } from "node:util";
 import type { BridgeRequest, ChangedFile, Review, ReviewFile, Snapshot, Workspace } from "../shared/diff";
+import { workspaceEmptyMessages, type WorkspaceEmptyReason } from "../shared/diff";
 import { isRelativeFile, isWithin, samePath } from "./paths";
 import { PullRequests } from "./pull-requests";
 import { GitHubReview } from "./github-review";
@@ -45,13 +46,40 @@ export class LocalDiff {
     return { id: row.id, root: row.root, sourceRoot: row.source_root, mode: row.mode, baseSha: row.base_sha, branch, lastUsedAt: row.last_used_at };
   }
   async catalog(): Promise<Workspace[]> { return Promise.all(this.rows().map((row) => this.describe(row))); }
-  private async workspace(id: string) {
+  private async inspectWorkspace(id: string): Promise<{ status: "ready"; workspace: Workspace; root: string } | { status: "empty"; reason: WorkspaceEmptyReason }> {
     const row = this.rows().find((candidate) => candidate.id === id);
-    if (!row) throw new Error("DevSpace workspace is unavailable or no longer active. Choose another workspace.");
-    const root = await realpath(row.root);
-    const top = (await git(root, ["rev-parse", "--show-toplevel"])).trim();
-    if (!samePath(await realpath(top), root)) throw new Error("DevSpace workspace must be the root of a Git checkout.");
-    return { workspace: await this.describe(row), root };
+    if (!row) return { status: "empty", reason: "missing" };
+    let root: string;
+    try { root = await realpath(row.root); }
+    catch (error) {
+      if (["ENOENT", "ENOTDIR"].includes(String((error as { code?: string }).code))) return { status: "empty", reason: "missing" };
+      throw new Error("Unable to access the DevSpace workspace folder.");
+    }
+    let top: string;
+    try { top = (await git(root, ["rev-parse", "--show-toplevel"])).trim(); }
+    catch (error) {
+      if (/not a git repository/i.test(String((error as { stderr?: string }).stderr))) return { status: "empty", reason: "not_git" };
+      throw new Error("Unable to read the DevSpace Git workspace.");
+    }
+    if (!samePath(await realpath(top), root)) return { status: "empty", reason: "not_root" };
+    try { await git(root, ["rev-parse", "--verify", "HEAD^{commit}"]); }
+    catch {
+      try { await git(root, ["rev-parse", "--verify", "--quiet", "HEAD"]); }
+      catch (error) {
+        if ((error as { code?: number }).code === 1 && !String((error as { stderr?: string }).stderr ?? "").trim()) return { status: "empty", reason: "no_commits" };
+      }
+      throw new Error("Unable to read the DevSpace Git workspace.");
+    }
+    return { status: "ready", workspace: await this.describe(row), root };
+  }
+  async inspect(id: string) {
+    const value = await this.inspectWorkspace(id);
+    return value.status === "ready" ? { status: "ready" as const, workspace: value.workspace } : value;
+  }
+  private async workspace(id: string) {
+    const value = await this.inspectWorkspace(id);
+    if (value.status === "empty") throw new Error(workspaceEmptyMessages[value.reason]);
+    return { workspace: value.workspace, root: value.root };
   }
   private async ref(root: string, workspace: Workspace, comparison: Comparison, options: ReviewOptions = {}) {
     const ref = comparison === "local" ? (await this.knownPr(workspace.id, options.prNumber)).pr.headSha : comparison === "task" ? workspace.baseSha : "HEAD";
@@ -296,6 +324,7 @@ export class LocalDiff {
   }
   dispatch(input: BridgeRequest): Promise<unknown> {
     if (input.op === "catalog") return this.catalog();
+    if (input.op === "inspect") return this.inspect(input.workspaceId);
     if (input.op === "snapshot") return this.snapshot(input.workspaceId, input.comparison, input);
     if (input.op === "review") return this.review(input.workspaceId, input.comparison, input);
     if (input.op === "pull-requests") return this.pullRequests(input.workspaceId);

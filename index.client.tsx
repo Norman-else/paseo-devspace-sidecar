@@ -37,7 +37,11 @@ export default function contribute(client: PluginClientContext) {
     finally { checking.delete(agentId); }
   };
   const clear = () => { for (const pill of pills.values()) pill.remove(); pills.clear(); };
-  const observe = (agent: Agent) => { agents.set(agent.id, agent); void register(agent); };
+  const observe = (agent: Agent) => {
+    agents.set(agent.id, agent);
+    if (!agent.workspaceId) { pills.get(agent.id)?.remove(); pills.delete(agent.id); checkedAt.delete(agent.id); return; }
+    void register(agent);
+  };
   const poll = setInterval(() => { for (const agent of agents.values()) void register(agent); }, 15000);
   void client.paseo.agents.list({ subscribe: {}, signal: lifetime.signal }).then(({ subscription }) => {
     subscription.subscribe({

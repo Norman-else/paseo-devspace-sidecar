@@ -1,6 +1,6 @@
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { z } from "zod";
-import { catalogRpc, devspaceWorkspaceIds, fileRpc, fileResultSchema, pullRequestRpc, reviewRpc, reviewSchema, snapshotRpc, snapshotSchema, suggestedWorkspace, workspaceSchema, type BridgeRequest } from "./shared/diff";
+import { catalogRpc, devspaceWorkspaceIds, fileRpc, fileResultSchema, pullRequestRpc, reviewRpc, reviewSchema, snapshotRpc, snapshotSchema, suggestedWorkspace, workspaceSchema, workspaceInspectionSchema, type BridgeRequest } from "./shared/diff";
 import { pullRequestResultSchema } from "./shared/pull-request";
 import { loadConfig, configDirectory } from "./server/config";
 import { join } from "node:path";
@@ -31,9 +31,9 @@ export default function contribute(server: PluginServerContext) {
     if (!devspaceWorkspaceIds(timeline).length) return { workspace: null };
     const workspaces = z.array(workspaceSchema).parse(await (await ready).request({ op: "catalog" }));
     const id = suggestedWorkspace(timeline, workspaces);
-    return { workspace: workspaces.find((w) => w.id === id) ?? null,
-      ...(!id ? { inferenceError: "This session's DevSpace workspace is no longer available." } : {}),
-    };
+    if (!id) return { workspace: null, emptyReason: "missing" as const };
+    const inspection = workspaceInspectionSchema.parse(await (await ready).request({ op: "inspect", workspaceId: id }));
+    return inspection.status === "ready" ? { workspace: inspection.workspace } : { workspace: null, emptyReason: inspection.reason };
   });
   server.handle(snapshotRpc, async (input) => snapshotSchema.parse(await (await ready).request({ op: "snapshot", ...input })));
   server.handle(fileRpc, async (input) => fileResultSchema.parse(await (await ready).request({ op: "file", ...input })));
