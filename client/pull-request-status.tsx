@@ -5,6 +5,7 @@ import { diffBackground } from "../shared/appearance";
 import { ChecksPopover } from "./checks-popover";
 import type { CheckDetail } from "../shared/review-details";
 import type { Colors } from "./review-ui";
+import { useCodeAppearance } from "./use-code-appearance";
 import { useMessages } from "./messages";
 
 type Available = Extract<PullRequestResult, { status: "available" }>;
@@ -51,13 +52,11 @@ function PullRequestSummary({ pr, result, colors, compact, workspaceId, maxCheck
           <Text style={{ color: colors.foregroundMuted, fontSize: 13, lineHeight: 20 }}>·</Text>
           <Text numberOfLines={1} ellipsizeMode="middle" style={{ flexShrink: 1, minWidth: 0, color: colors.foregroundMuted, fontSize: 13, lineHeight: 20 }}>{result.repository}</Text>
         </View>
-        {!compact ? <Text selectable numberOfLines={1} ellipsizeMode="middle" accessibilityLabel={t("prBranchDirection", { source: result.branch, target: pr.baseBranch })}
-          style={{ flexGrow: 1, flexShrink: 1, flexBasis: 170, minWidth: 0, textAlign: "right", color: colors.foregroundMuted, fontSize: 13, lineHeight: 20 }}>{result.branch} → {pr.baseBranch}</Text> : null}
+        {!compact ? <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 170, minWidth: 0, alignItems: "flex-end" }}><BranchComparison source={result.branch} target={pr.baseBranch} colors={colors} /></View> : null}
       </View>
       <StatusBadge label={t(stateKey[pr.state])} tone={tone} colors={colors} filled />
     </View>
-    {compact ? <Text selectable accessibilityLabel={t("prBranchDirection", { source: result.branch, target: pr.baseBranch })}
-      style={{ color: colors.foregroundMuted, fontSize: 12, lineHeight: 18 }}>{result.branch} → {pr.baseBranch}</Text> : null}
+    {compact ? <View style={{ alignItems: "flex-start" }}><BranchComparison source={result.branch} target={pr.baseBranch} colors={colors} /></View> : null}
     <Text numberOfLines={2} style={{ color: colors.foreground, fontSize: 13, fontWeight: "500", lineHeight: 19 }}>{pr.title}</Text>
     <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
       {workspaceId && checks.total ? <ChecksPopover key={`${pr.number}:${pr.headSha}`} label={checksLabel} icon={checks.status === "passed" ? "CircleCheck" : checks.status === "failed" ? "CircleX" : "CircleDot"} tone={checkTone} workspaceId={workspaceId} number={pr.number} headSha={pr.headSha} checks={checks} colors={colors} maxWidth={maxChecksWidth} maxHeight={maxChecksHeight} onFeedback={onCheckFeedback} />
@@ -71,6 +70,15 @@ function PullRequestSummary({ pr, result, colors, compact, workspaceId, maxCheck
     </View>
 
   </>;
+}
+
+function BranchComparison({ source, target, colors }: { source: string; target: string; colors: Colors }) {
+  const { t } = useMessages(), { fontFamily } = useCodeAppearance();
+  return <View testID="devspace-branch-comparison" accessible accessibilityLabel={t("prBranchDirection", { source, target })} style={{ flexDirection: "row", alignItems: "center", maxWidth: "100%", minHeight: 24, paddingHorizontal: 8, gap: 6, borderRadius: 4, backgroundColor: colors.surface1 }}>
+    <Text testID="devspace-source-branch" selectable numberOfLines={1} ellipsizeMode="middle" style={{ flexShrink: 1, minWidth: 0, maxWidth: 200, color: colors.foreground, fontFamily, fontSize: 12, lineHeight: 18, fontWeight: "500" }}>{source}</Text>
+    <Text style={{ flexShrink: 0, color: colors.foregroundMuted, fontSize: 12, lineHeight: 18 }}>→</Text>
+    <Text testID="devspace-base-branch" selectable numberOfLines={1} ellipsizeMode="middle" style={{ flexShrink: 0, maxWidth: 112, color: colors.foregroundMuted, fontFamily, fontSize: 12, lineHeight: 18 }}>{target}</Text>
+  </View>;
 }
 
 function StatusBadge({ label, icon, tone, colors, filled = false }: { label: string; icon?: string; tone: string; colors: Colors; filled?: boolean }) {
