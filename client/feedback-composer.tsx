@@ -15,7 +15,7 @@ type Attachment = {
 export type FeedbackDraft = { title: string; context: string; instruction: string; intent?: "explain" | "change"; attachment?: Attachment };
 export function FeedbackComposer({ draft, agentId, colors, onClose }: { draft: FeedbackDraft | null; agentId: string; colors: Colors; onClose(): void }) {
   const { t, locale } = useMessages(), paseo = usePaseo(), toast = useToast();
-  const [instruction, setInstruction] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState(false), [expanded, setExpanded] = useState(false), [focused, setFocused] = useState(false);
+  const [instruction, setInstruction] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState(false), [expanded, setExpanded] = useState(false);
   useEffect(() => { setInstruction(draft?.intent === "change" ? "" : draft?.instruction ?? ""); setError(false); setExpanded(false); }, [draft]);
   const message = `${instruction.trim()}\n\n${draft?.context ?? ""}`;
   const attachment = draft?.attachment;
@@ -41,7 +41,7 @@ export function FeedbackComposer({ draft, agentId, colors, onClose }: { draft: F
         </View>
         <View style={{ gap: 8 }}>
           <Text style={{ color: colors.foreground, fontSize: 13, fontWeight: "500" }}>{t(draft?.intent === "change" ? "changeFeedbackLabel" : "feedbackMessageLabel")}</Text>
-          <TextInput multiline editable={!busy} value={instruction} onChangeText={(value) => { setInstruction(value); if (error) setError(false); }} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} placeholderTextColor={colors.foregroundMuted} placeholder={t("feedbackInstructions")} accessibilityLabel={t(draft?.intent === "change" ? "changeFeedbackLabel" : "feedbackMessageLabel")} style={{ minHeight: 132, padding: 12, borderWidth: 1, borderColor: focused ? colors.accent : colors.border, borderRadius: 8, backgroundColor: colors.surface0, color: colors.foreground, fontSize: 15, lineHeight: 23, textAlignVertical: "top" }} />
+          <TextInput multiline editable={!busy} value={instruction} onChangeText={(value) => { setInstruction(value); if (error) setError(false); }} placeholderTextColor={colors.foregroundMuted} placeholder={t("feedbackInstructions")} accessibilityLabel={t(draft?.intent === "change" ? "changeFeedbackLabel" : "feedbackMessageLabel")} style={{ minHeight: 132, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 8, backgroundColor: colors.surface0, color: colors.foreground, fontSize: 15, lineHeight: 23, textAlignVertical: "top" }} />
         </View>
         <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, overflow: "hidden" }}>
           <Disclosure label={previewLabel} expanded={expanded} onPress={() => setExpanded(!expanded)} colors={colors} />
