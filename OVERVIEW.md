@@ -6,7 +6,7 @@ Open **Review** (**审阅** in Chinese) from the composer pill, Command Center, 
 
 **Task changes** includes all changes since the task's starting commit, even after committing. **Uncommitted** combines staged, unstaged, and new files against HEAD. All file diffs appear in one continuous review, with a flat file index on the right for navigation. Files have collapsible headers, syntax highlighting, line numbers, Git colors, and reviewed markers. Updates run every three seconds; reviewed markers reset when the file's patch changes.
 
-The code area uses a neutral dark background with green/red change fills, with a separate light palette. Long code wraps to fit the code area, and the file index can be resized by dragging its divider. Labels follow Paseo's English or Simplified Chinese language setting automatically.
+The code area uses a neutral dark background with green/red change fills, with a separate light palette. Long code wraps to fit the code area, and the file index can be resized by dragging its divider or hidden with the toolbar's right-panel icon. Its width and visibility are saved with the tab. Labels follow Paseo's English or Simplified Chinese language setting automatically.
 
 A flat header shows the branch's GitHub PR, including draft/open/merged/closed state, CI checks, review decisions, and merge conflicts. It refreshes every 30 seconds and links to GitHub. The project machine needs an authenticated GitHub CLI; repository and branch metadata are queried through it, while credentials stay on that machine. PR status is read-only and does not create, approve, merge, or deploy changes.
 

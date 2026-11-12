@@ -12,9 +12,9 @@ import type { LineSelection } from "../shared/selection";
 export type Colors = PluginAgentPanelProps["theme"]["colors"];
 const nonSelectingStyle = Platform.OS === "web" ? ({ userSelect: "none", touchAction: "none", cursor: "crosshair" } as unknown as ViewStyle) : {};
 const fileNameTypography = { fontSize: 12, lineHeight: 18, fontWeight: "500" as const };
-export function ToolButton({ icon, label, colors, onPress, active = false, touch = false }: { icon: string; label: string; colors: Colors; onPress(): void; active?: boolean; touch?: boolean }) {
+export function ToolButton({ icon, label, colors, onPress, active = false, touch = false, expanded }: { icon: string; label: string; colors: Colors; onPress(): void; active?: boolean; touch?: boolean; expanded?: boolean }) {
   const [hover, setHover] = useState(false);
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)}
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={expanded === undefined ? undefined : { expanded }} aria-expanded={expanded} onPress={onPress} onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)}
     style={({ pressed }) => ({ width: touch ? 44 : 28, height: touch ? 44 : 28, alignItems: "center", justifyContent: "center", borderRadius: 4, backgroundColor: hover || pressed || active ? colors.surface2 : "transparent" })}>
     <Icon name={icon} size={touch ? 16 : 14} color={active ? colors.foreground : colors.foregroundMuted} />
   </Pressable>;
