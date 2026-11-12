@@ -11,11 +11,24 @@ export function ThreadContent({ thread, colors, onFeedback, onJump, onHeight, pr
   const comments = preview && !expanded ? thread.comments.slice(0, 1) : thread.comments;
   return <View onLayout={(event) => onHeight?.(event.nativeEvent.layout.height)} style={{ padding: 12, gap: 8, backgroundColor: colors.surface1, borderBottomWidth: 1, borderColor: colors.border }}>
     <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 }}><Text numberOfLines={1} style={{ flex: 1, minWidth: 0, color: colors.foregroundMuted, fontSize: 11 }}>{thread.path}{thread.line ? `:${thread.line}` : ""}</Text><Text style={{ color: thread.resolved ? colors.foregroundMuted : colors.statusWarning, fontSize: 11 }}>{t(thread.outdated ? "outdated" : thread.resolved ? "resolved" : "unresolved")}</Text></View>
-    {comments.map((comment) => <View key={comment.url} style={{ gap: 4 }}><CommentAuthor comment={comment} colors={colors} />{preview && !expanded ? <Text selectable numberOfLines={3} style={{ color: colors.foreground, fontSize: 13, lineHeight: 19 }}>{comment.body}</Text> : <Markdown>{comment.body}</Markdown>}</View>)}
+    <View>
+      {comments.map((comment, index) => <View key={comment.url} testID="devspace-comment" style={{ gap: 12, paddingTop: index ? 16 : 4, paddingBottom: 16, borderTopWidth: index ? 1 : 0, borderColor: colors.border }}><CommentAuthor comment={comment} colors={colors} />{preview && !expanded ? <Text selectable numberOfLines={3} style={{ color: colors.foreground, fontSize: 13, lineHeight: 19 }}>{comment.body}</Text> : <Markdown>{comment.body}</Markdown>}</View>)}
+    </View>
     {preview && (thread.comments.length > 1 || (thread.comments[0]?.body.length ?? 0) > 140) ? <Pressable accessibilityRole="button" onPress={() => setExpanded(!expanded)} style={{ minHeight: 36, justifyContent: "center" }}><Text style={{ color: colors.accent, fontSize: 12 }}>{t(expanded ? "collapseDiscussion" : "expandDiscussion", { count: thread.comments.length })}</Text></Pressable> : null}
     {thread.truncated ? <Text style={{ fontSize: 11, color: colors.foregroundMuted }}>{t("discussionsTruncated")}</Text> : null}
-    <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12 }}>{onJump && !thread.outdated ? <Pressable accessibilityRole="button" onPress={() => onJump(thread)} style={{ minHeight: 36, justifyContent: "center" }}><Text style={{ color: colors.accent, fontSize: 12 }}>{t("jumpToCode")}</Text></Pressable> : null}<Pressable accessibilityRole="button" onPress={() => onFeedback(thread)} style={{ minHeight: 36, justifyContent: "center" }}><Text style={{ color: colors.foreground, fontSize: 12 }}>{t("requestChange")}</Text></Pressable>{thread.comments[0] ? <ExternalLink href={thread.comments[0].url}><Text style={{ color: colors.foregroundMuted, fontSize: 12 }}>{t("viewOnGitHub")}</Text></ExternalLink> : null}</View>
+    <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, paddingTop: 12, borderTopWidth: 1, borderColor: colors.border }}>
+      {onJump && !thread.outdated ? <CommentAction label={t("jumpToCode")} colors={colors} onPress={() => onJump(thread)} /> : null}
+      <CommentAction primary label={t("requestChange")} colors={colors} onPress={() => onFeedback(thread)} />
+      {thread.comments[0] ? <ExternalLink href={thread.comments[0].url}><View style={{ minHeight: 44, paddingHorizontal: 8, justifyContent: "center" }}><Text style={{ color: colors.foregroundMuted, fontSize: 12, textDecorationLine: "underline" }}>{t("viewOnGitHub")}</Text></View></ExternalLink> : null}
+    </View>
   </View>;
+}
+function CommentAction({ label, colors, onPress, primary = false }: { label: string; colors: Colors; onPress(): void; primary?: boolean }) {
+  const [hover, setHover] = useState(false);
+  return <Pressable accessibilityRole="button" onPress={onPress} onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)}
+    style={({ pressed }) => ({ minHeight: 44, paddingHorizontal: 12, justifyContent: "center", borderWidth: 1, borderColor: hover || pressed ? colors.foregroundMuted : colors.border, borderRadius: 6, backgroundColor: primary || hover || pressed ? colors.surface2 : colors.surface0, opacity: pressed ? 0.75 : 1 })}>
+    <Text style={{ color: colors.foreground, fontSize: 12, fontWeight: "500" }}>{label}</Text>
+  </Pressable>;
 }
 export function InlineDiscussion({ thread, expanded, onToggle, colors, onFeedback, onHeight }: { thread: ReviewThread; expanded: boolean; onToggle(): void; colors: Colors; onFeedback(thread: ReviewThread): void; onHeight(height: number): void }) {
   const { t } = useMessages();
