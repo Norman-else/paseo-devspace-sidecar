@@ -1,5 +1,6 @@
 export const en = {
   attachedCode_one: "{{count}} line of code attached", attachedCode_other: "{{count}} lines of code attached", attachedContext: "Review context attached", changeFeedbackLabel: "What should change?", feedbackMessageLabel: "Your message", feedbackAttachmentHint: "The attached context will be sent to this conversation.", sendingFeedback: "Sending…",
+  allChecks: "All checks", checkPassed: "Passed", checkFailed: "Failed", checkPending: "Running", checkSkipped: "Skipped", checkUnknown: "Unknown",
   codeReview: "Review", openReview: "View code changes and PR status", commandDescription: "View DevSpace changes and pull request status in the right sidebar",
   taskChanges: "Task changes", uncommitted: "Uncommitted", files_one: "{{count}} file", files_other: "{{count}} files", reviewedCount: " · {{count}} reviewed",
   filterFiles: "Filter files", filterPlaceholder: "Filter files…", expandAll: "Expand all files", collapseAll: "Collapse all files",
@@ -52,6 +53,7 @@ export const en = {
 
 export const zh: Record<keyof typeof en, string> = {
   attachedCode_one: "已附上 {{count}} 行代码", attachedCode_other: "已附上 {{count}} 行代码", attachedContext: "已附上审阅上下文", changeFeedbackLabel: "希望如何修改？", feedbackMessageLabel: "反馈内容", feedbackAttachmentHint: "附带的上下文会一起发送到当前会话。", sendingFeedback: "正在发送…",
+  allChecks: "全部检查", checkPassed: "通过", checkFailed: "失败", checkPending: "进行中", checkSkipped: "已跳过", checkUnknown: "未知",
   codeReview: "审阅", openReview: "查看代码改动与 PR 状态", commandDescription: "在右侧查看 DevSpace 代码改动与 PR 状态",
   taskChanges: "任务改动", uncommitted: "未提交", files_one: "{{count}} 个文件", files_other: "{{count}} 个文件", reviewedCount: " · 已查看 {{count}}",
   filterFiles: "筛选文件", filterPlaceholder: "筛选文件…", expandAll: "展开所有文件", collapseAll: "折叠所有文件",

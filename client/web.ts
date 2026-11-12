@@ -5,8 +5,8 @@ import { codeAppearance, type CodeAppearance } from "../shared/appearance";
 // appearance-storage adapter isolated here until the public SDK exposes typography.
 declare const window: {
   localStorage: { getItem(key: string): string | null };
-  addEventListener(type: string, listener: () => void): void;
-  removeEventListener(type: string, listener: () => void): void;
+  addEventListener(type: string, listener: (event: DismissEvent) => void, capture?: boolean): void;
+  removeEventListener(type: string, listener: (event: DismissEvent) => void, capture?: boolean): void;
   getSelection(): { isCollapsed: boolean; toString(): string; anchorNode: SelectionNode | null; focusNode: SelectionNode | null; removeAllRanges(): void } | null;
 };
 type SelectionNode = { nodeType: number; parentElement: SelectionElement | null };
@@ -81,4 +81,19 @@ export function installSelectionCursor(foreground: string, surface: string) {
   style.textContent = `[data-devspace-select-handle], [data-devspace-select-handle] * { cursor: url("data:image/svg+xml,${encodeURIComponent(svg)}") 10 10, crosshair !important; }`;
   document.head.appendChild(style);
   return () => style.remove();
+}
+
+
+type DismissEvent = { key?: string; target?: SelectionElement | null; preventDefault?(): void; stopPropagation?(): void };
+export function checksScopeProps(scope: string) {
+  return Platform.OS === "web" ? { dataSet: { devspaceChecksScope: scope } } : {};
+}
+/** Observe outside actions without intercepting them or changing the diff's scroll position. */
+export function watchChecksDismiss(scope: string, close: () => void) {
+  if (Platform.OS !== "web" || typeof window === "undefined") return () => {};
+  const outside = (event: DismissEvent) => { if (event.target?.closest?.("[data-devspace-checks-scope]")?.dataset.devspaceChecksScope !== scope) close(); };
+  const key = (event: DismissEvent) => { if (event.key === "Escape") { event.preventDefault?.(); event.stopPropagation?.(); close(); } };
+  const listeners = [["pointerdown", outside, true], ["focusin", outside, true], ["keydown", key, true], ["resize", close, false], ["blur", close, false]] as const;
+  for (const [name, listener, capture] of listeners) window.addEventListener(name, listener, capture);
+  return () => { for (const [name, listener, capture] of listeners) window.removeEventListener(name, listener, capture); };
 }
