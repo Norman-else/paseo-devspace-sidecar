@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { reviewRows } from "../shared/review.ts";
 import { floatingSelectionPosition, selectedSpan, selectionLineAt } from "../shared/selection-layout.ts";
-import { selectedCode } from "../shared/selection.ts";
+import { selectedCode, selectedLines } from "../shared/selection.ts";
 const files = ["a.txt", "b.txt"].map((path) => ({ path, status: "M", additions: 2, deletions: 1, binary: false, hash: path, patch: "@@ -1,3 +1,4 @@\n first\n-old\n+new\n+extra\n last\n" }));
 test("drag hit testing follows wrapped rows and clamps selection to its original file and side", () => {
   const model = reviewRows(files, new Set(), 60);
@@ -28,6 +28,8 @@ test("selected code excludes row gutters, diff markers and removed lines when se
   const model = reviewRows(files, new Set(), 300);
   const selection = { path: "a.txt", side: "new" as const, start: 4, end: 2 };
   assert.equal(selectedCode(model.rows, selection), "new\nextra\nlast");
+  assert.deepEqual(selectedLines(model.rows, selection), [{ number: 2, text: "new" }, { number: 3, text: "extra" }, { number: 4, text: "last" }]);
+  assert.deepEqual(selectedLines(model.rows, { ...selection, side: "old" }), [{ number: 2, text: "old" }, { number: 3, text: "last" }]);
   const span = selectedSpan(model, selection)!;
   assert.ok(span.bottom > span.top);
   assert.equal(selectedSpan(model, { ...selection, path: "missing" }), null);
