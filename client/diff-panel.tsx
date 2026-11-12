@@ -15,6 +15,7 @@ import { useMessages } from "./messages";
 import { useCodeAppearance } from "./use-code-appearance";
 import { PullRequestStatus } from "./pull-request-status";
 import { reviewHeader } from "../shared/review-header";
+import { ReviewMenu } from "./review-menu";
 import { ReviewToolbar } from "./review-toolbar";
 import { useStickyFileHeader } from "./use-sticky-file-header";
 import { Discussions, InlineDiscussion } from "./review-discussions";
@@ -211,7 +212,15 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
     else { clearNativeCodeSelection(); setSelection(null); setIndexOpen(!indexOpen); }
   }} />;
   const optionAction = <ToolButton touch={!wide} icon="SlidersHorizontal" label={t("reviewOptions")} active={effectiveFilter !== "all"} colors={colors} onPress={() => setOptionsOpen(true)} />;
-  const actions = <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>{bound ? <><ToolButton icon="Search" label={t("filterFiles")} colors={colors} touch={!wide} onPress={() => { setSearchOpen(!searchOpen); if (searchOpen) setSearch(""); }} active={searchOpen} />{wide ? collapseAction : indexAction}</> : null}{wide || !bound ? refreshAction : null}{bound && wide ? <>{optionAction}{indexAction}</> : null}</View>;
+  const toggleSearch = () => { setSearchOpen(!searchOpen); if (searchOpen) setSearch(""); };
+  const searchAction = <ToolButton icon="Search" label={t("filterFiles")} colors={colors} touch={!wide} onPress={toggleSearch} active={searchOpen} />;
+  const moreAction = <ReviewMenu title={t("moreReviewActions")} icon="Ellipsis" colors={colors} touch align="right" width={Math.min(280, size.width - 88)} options={[
+    ...(size.width < 380 ? [{ id: "search", label: t("filterFiles"), icon: "Search", onSelect: toggleSearch }] : []),
+    { id: "collapse", label: t(collapsed.size ? "expandAll" : "collapseAll"), icon: "ListCollapse", onSelect: () => mutate({ collapsed: collapsed.size ? [] : files.map((file) => file.path) }) },
+    { id: "filters", label: t("reviewOptions"), icon: "SlidersHorizontal", onSelect: () => setOptionsOpen(true) },
+    { id: "refresh", label: t("refresh"), icon: "RefreshCw", onSelect: refresh },
+  ]} />;
+  const actions = <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>{bound ? wide ? <>{searchAction}{collapseAction}{refreshAction}{optionAction}{indexAction}</> : <>{size.width >= 380 ? searchAction : null}{moreAction}{indexAction}</> : refreshAction}</View>;
   return <View style={{ flex: 1, minHeight: 0, backgroundColor: colors.surface0 }} testID="devspace-diff-panel" onLayout={(event) => { const width = event.nativeEvent.layout.width; if (width > 0) setSize((previous) => previous.width === width ? previous : { ...previous, width }); }}>
     {pr && header.mode === "pull-request" ? <PullRequestStatus result={pullRequests.data} loading={false} error={null} colors={colors} compact={!wide} selectedNumber={pr.number} onSelect={(prNumber) => save({ ...state, prNumber, filter: "all", scope: "", reviewed: {}, collapsed: [] })} workspaceId={bound?.id} maxChecksHeight={size.height} maxChecksWidth={size.width - 24} onCheckFeedback={checkFeedback} />
       : <View style={{ paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 8 }}><Icon name={bound ? "GitBranch" : "FileDiff"} size={14} color={colors.foregroundMuted} /><Text style={{ color: colors.foreground, fontSize: 12, fontWeight: "600", flex: 1 }} numberOfLines={1}>{bound?.branch ?? t("codeReview")}</Text>{!bound ? actions : null}</View>}
@@ -220,8 +229,8 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
     {pr && bound && view === "comments" ? <View style={{ flex: 1, minHeight: 0 }}>
       {discussions.isPending ? <ActivityIndicator color={colors.foregroundMuted} style={{ margin: 20 }} /> : discussions.error ? <Pressable accessibilityRole="button" onPress={() => void discussions.refetch()} style={{ padding: 16 }}><Text style={{ color: colors.statusDanger, fontSize: 13 }}>{t("prUnavailable")} · {t("retry")}</Text></Pressable> : <Discussions threads={discussions.data?.threads ?? []} resolved={showResolved} onResolved={setShowResolved} onJump={jumpThread} onFeedback={threadFeedback} colors={colors} inlineAvailable={!!inlineAvailable} truncated={!!discussions.data?.truncated} />}
     </View> : null}
-    {bound && view === "changes" ? <ReviewToolbar mode={comparison} modes={pr ? ["pr", "local"] : bound.baseSha ? ["task", "uncommitted"] : ["uncommitted"]} fileCount={snapshot.data?.totalFiles} reviewedCount={reviewedCount} totals={totals} compact={!wide}
-      secondaryActions={!wide ? <View style={{ flexDirection: "row", gap: 2 }}>{optionAction}{refreshAction}</View> : undefined} searchOpen={searchOpen} search={search} colors={colors} onSearchChange={setSearch} searchType={searchType} onSearchType={(type) => { setSearchType(type); setSearch(""); }} matchCount={matches.length} matchIndex={matchIndex} onMatch={match}
+    {bound && view === "changes" ? <ReviewToolbar mode={comparison} modes={pr ? ["pr", "local"] : bound.baseSha ? ["task", "uncommitted"] : ["uncommitted"]} fileCount={snapshot.data?.totalFiles} reviewedCount={reviewedCount} totals={totals} compact={!wide} availableWidth={size.width}
+      searchOpen={searchOpen} search={search} colors={colors} onSearchChange={setSearch} searchType={searchType} onSearchType={(type) => { setSearchType(type); setSearch(""); }} matchCount={matches.length} matchIndex={matchIndex} onMatch={match}
       onModeChange={(comparison) => { save({ ...state, comparison, filter: "all", scope: "", collapsed: [], reviewed: {} }); setSearch(""); }}>{actions}</ReviewToolbar> : null}
     {view === "changes" && pr && local.data && local.data.totalFiles > 0 && local.data.ref === document.data?.snapshot.headSha && comparison === "pr" && !since ? <Pressable accessibilityRole="button" onPress={() => save({ ...state, comparison: "local", filter: "all", scope: "", collapsed: [], reviewed: {} })} style={{ paddingHorizontal: 12, paddingVertical: 7, borderBottomWidth: 1, borderColor: colors.border }}><Text style={{ color: colors.statusWarning, fontSize: 11 }}>{t("localPending", { count: local.data.totalFiles })}</Text></Pressable> : null}
     {view === "changes" && pr && local.error && comparison === "pr" && !since ? <Text style={{ color: colors.foregroundMuted, paddingHorizontal: 12, paddingVertical: 6, fontSize: 11 }}>{t("localUnavailable")}</Text> : null}

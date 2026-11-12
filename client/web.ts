@@ -85,13 +85,13 @@ export function installSelectionCursor(foreground: string, surface: string) {
 
 
 type DismissEvent = { key?: string; target?: SelectionElement | null; preventDefault?(): void; stopPropagation?(): void };
-export function checksScopeProps(scope: string) {
-  return Platform.OS === "web" ? { dataSet: { devspaceChecksScope: scope } } : {};
+export function popoverScopeProps(scope: string) {
+  return Platform.OS === "web" ? { dataSet: { devspacePopoverScope: scope } } : {};
 }
 /** Observe outside actions without intercepting them or changing the diff's scroll position. */
-export function watchChecksDismiss(scope: string, close: () => void) {
+export function watchPopoverDismiss(scope: string, close: () => void) {
   if (Platform.OS !== "web" || typeof window === "undefined") return () => {};
-  const outside = (event: DismissEvent) => { if (event.target?.closest?.("[data-devspace-checks-scope]")?.dataset.devspaceChecksScope !== scope) close(); };
+  const outside = (event: DismissEvent) => { if (event.target?.closest?.("[data-devspace-popover-scope]")?.dataset.devspacePopoverScope !== scope) close(); };
   const key = (event: DismissEvent) => { if (event.key === "Escape") { event.preventDefault?.(); event.stopPropagation?.(); close(); } };
   const listeners = [["pointerdown", outside, true], ["focusin", outside, true], ["keydown", key, true], ["resize", close, false], ["blur", close, false]] as const;
   for (const [name, listener, capture] of listeners) window.addEventListener(name, listener, capture);

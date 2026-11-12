@@ -6,9 +6,9 @@ import ts from "typescript";
 // Exercise the production listener against browser capture/bubble behavior.
 const source = readFileSync(new URL("../client/web.ts", import.meta.url), "utf8");
 const tree = ts.createSourceFile("web.ts", source, ts.ScriptTarget.Latest, true);
-const watcher = tree.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "watchChecksDismiss")!;
+const watcher = tree.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "watchPopoverDismiss")!;
 const compiled = ts.transpileModule(`module.exports = ${watcher.getText(tree).replace(/^export /, "")}`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
-type Event = { key?: string; target?: { closest(): { dataset: { devspaceChecksScope: string } } | null }; preventDefault?(): void; stopPropagation?(): void };
+type Event = { key?: string; target?: { closest(): { dataset: { devspacePopoverScope: string } } | null }; preventDefault?(): void; stopPropagation?(): void };
 test("check popovers ignore internal focus changes and dismiss on outside actions or Escape", () => {
   const listeners: { name: string; listener(event: Event): void; capture: boolean }[] = [];
   const window = {
@@ -20,11 +20,11 @@ test("check popovers ignore internal focus changes and dismiss on outside action
   let closed = 0;
   const cleanup = module.exports("current", () => closed++);
   const dispatch = (name: string, event: Event, descendant = true) => { for (const entry of listeners) if (entry.name === name && (!descendant || name !== "blur" || entry.capture)) entry.listener(event); };
-  const inside = { target: { closest: () => ({ dataset: { devspaceChecksScope: "current" } }) } };
+  const inside = { target: { closest: () => ({ dataset: { devspacePopoverScope: "current" } }) } };
   dispatch("pointerdown", inside); dispatch("focusin", inside); dispatch("blur", inside);
   assert.equal(closed, 0, "selecting a check can remove its focused row without closing the popover");
   dispatch("pointerdown", { target: { closest: () => null } });
-  dispatch("focusin", { target: { closest: () => ({ dataset: { devspaceChecksScope: "another-panel" } }) } });
+  dispatch("focusin", { target: { closest: () => ({ dataset: { devspacePopoverScope: "another-panel" } }) } });
   let prevented = false, stopped = false;
   dispatch("keydown", { key: "Escape", preventDefault: () => { prevented = true; }, stopPropagation: () => { stopped = true; } });
   assert.equal(closed, 3); assert.ok(prevented && stopped);
