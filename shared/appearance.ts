@@ -33,3 +33,12 @@ export function diffBackground(tone: string, surface: string): string {
   const shade = dark ? 0.6 : 1;
   return "#" + foreground.map((channel, index) => Math.round(channel * shade * alpha + background[index] * (1 - alpha)).toString(16).padStart(2, "0")).join("");
 }
+
+/** Neutral code surfaces and change fills sampled from the supplied review reference. */
+export function codeReviewPalette(surface: string) {
+  const background = rgb(surface);
+  const dark = !background || background[0] * 0.2126 + background[1] * 0.7152 + background[2] * 0.0722 < 128;
+  return dark
+    ? { dark, background: "#212121", header: "#303030", hover: "#383838", border: "#3a3a3a", added: "#304930", removed: "#3d2a28", addedMarker: "#3fb753", removedMarker: "#df6470" }
+    : { dark, background: surface, header: surface, hover: surface, border: "#d8d8d8", added: "#e6f2e4", removed: "#f8e5e2", addedMarker: "#2b873c", removedMarker: "#bd4350" };
+}

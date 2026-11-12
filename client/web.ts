@@ -11,10 +11,12 @@ declare const window: {
 };
 type SelectionNode = { nodeType: number; parentElement: SelectionElement | null };
 type SelectionElement = SelectionNode & { closest(selector: string): SelectionElement | null; dataset: Record<string, string | undefined> };
-declare const document: { documentElement: object };
+type CursorStyle = { textContent: string; remove(): void };
+declare const document: { documentElement: object; head: { appendChild(style: CursorStyle): void }; createElement(tag: "style"): CursorStyle };
 declare const MutationObserver: new (callback: () => void) => { observe(target: object, options: { attributes: boolean; attributeFilter: string[] }): void; disconnect(): void };
 
 export const codeScopeProps = Platform.OS === "web" ? { dataSet: { pmono: "true" } } : {};
+export const selectionHandleProps = Platform.OS === "web" ? { dataSet: { devspaceSelectHandle: "true" } } : {};
 export function readCodeAppearance(fallback: string): CodeAppearance {
   if (Platform.OS !== "web" || typeof window === "undefined") return codeAppearance(null, fallback);
   try {
@@ -68,4 +70,15 @@ export function watchSelectionCancellation(cancel: () => void) {
   if (Platform.OS !== "web" || typeof window === "undefined") return () => {};
   window.addEventListener("blur", cancel);
   return () => window.removeEventListener("blur", cancel);
+}
+
+/** Keep the selection cursor on icon descendants as well as the gutter handle. */
+export function installSelectionCursor(foreground: string, surface: string) {
+  if (Platform.OS !== "web" || typeof document === "undefined") return () => {};
+  const safe = (color: string) => color.replace(/[^#a-zA-Z0-9().,% -]/g, "");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><path d="M10 3v14M3 10h14" stroke="${safe(surface)}" stroke-width="4" stroke-linecap="round"/><path d="M10 3v14M3 10h14" stroke="${safe(foreground)}" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+  const style = document.createElement("style");
+  style.textContent = `[data-devspace-select-handle], [data-devspace-select-handle] * { cursor: url("data:image/svg+xml,${encodeURIComponent(svg)}") 10 10, crosshair !important; }`;
+  document.head.appendChild(style);
+  return () => style.remove();
 }

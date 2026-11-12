@@ -1,0 +1,31 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { reviewRows } from "../shared/review.ts";
+import { codeReviewPalette } from "../shared/appearance.ts";
+const file = { path: "Example.java", status: "M", additions: 3, deletions: 1, binary: false, hash: "a", patch: "@@ -1 +1,3 @@\n line one\n+added two\n+added three\n@@ -96 +98 @@ class Example\n-old\n+new\n" };
+const key = "Example.java:gap:2:4";
+test("a 94-line folded region expands in place and can collapse without losing its cached source", () => {
+  const folded = reviewRows([file], new Set(), 500);
+  const gap = folded.rows.find((row) => row.key === key);
+  assert.equal(gap?.kind, "gap"); if (gap?.kind !== "gap") throw Error("Missing gap");
+  assert.equal(gap.count, 94); assert.equal(gap.expanded, false);
+  const lines = Array.from({ length: 94 }, (_, n) => "context " + (n + 1));
+  const contexts = { [key]: { lines, total: 150, expanded: true } };
+  const expanded = reviewRows([file], new Set(), 500, undefined, undefined, { contexts });
+  const control = expanded.rows.findIndex((row) => row.key === key);
+  assert.equal((expanded.rows[control] as any).expanded, true);
+  assert.equal((expanded.rows[control] as any).omitted, 0);
+  assert.deepEqual((expanded.rows[control + 1] as any).line, { kind: "context", text: " context 1", old: 2, next: 4 });
+  assert.deepEqual((expanded.rows[control + 94] as any).line, { kind: "context", text: " context 94", old: 95, next: 97 });
+  const collapsed = reviewRows([file], new Set(), 500, undefined, undefined, { contexts: { [key]: { ...contexts[key], expanded: false } } });
+  assert.equal(collapsed.rows.length, folded.rows.length);
+  assert.equal((collapsed.rows.find((row) => row.key === key) as any).count, 94);
+  assert.equal(lines.length, 94);
+});
+test("code review uses neutral reference colors in dark themes and readable distinct light fills", () => {
+  const dark = codeReviewPalette("#141b18");
+  assert.equal(dark.background, "#212121"); assert.equal(dark.added, "#304930"); assert.equal(dark.removed, "#3d2a28");
+  assert.notEqual(dark.addedMarker, dark.added); assert.notEqual(dark.removedMarker, dark.removed);
+  const light = codeReviewPalette("#fafafa");
+  assert.equal(light.background, "#fafafa"); assert.notEqual(light.added, light.removed); assert.notEqual(light.added, light.background);
+});

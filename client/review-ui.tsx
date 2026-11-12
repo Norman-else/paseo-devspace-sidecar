@@ -5,8 +5,8 @@ import type { PluginAgentPanelProps } from "@getpaseo/plugin/client";
 import type { ReviewFile } from "../shared/diff";
 import type { ReviewRow } from "../shared/review";
 import { useMessages } from "./messages";
-import { diffBackground, SELECTION_HANDLE_WIDTH, type CodeAppearance } from "../shared/appearance";
-import { codeSelectionProps } from "./web";
+import { codeReviewPalette, diffBackground, SELECTION_HANDLE_WIDTH, type CodeAppearance } from "../shared/appearance";
+import { codeSelectionProps, selectionHandleProps } from "./web";
 import type { LineSelection } from "../shared/selection";
 
 export type Colors = PluginAgentPanelProps["theme"]["colors"];
@@ -68,16 +68,17 @@ export function CodeLine({ row, colors, typography, onHeight, selection, onSelec
   const [hovered, setHovered] = useState(false);
   const { fontFamily, fontSize, lineHeight, gutterFontSize, gutterCellWidth, markerWidth } = typography;
   const { line, tokens } = row;
+  const reviewPalette = codeReviewPalette(colors.surface0);
   const add = line.kind === "add", remove = line.kind === "remove";
   const number = selection?.side === "old" ? line.old : line.next;
   const selected = selection?.path === row.path && number !== undefined && number >= Math.min(selection.start, selection.end) && number <= Math.max(selection.start, selection.end);
   const handleActive = hovered || selected && (number === selection?.start || number === selection?.end);
-  const tone = add ? colors.statusSuccess : remove ? colors.statusDanger : colors.foregroundMuted;
+  const tone = add ? reviewPalette.addedMarker : remove ? reviewPalette.removedMarker : colors.foregroundMuted;
   const palette = { plain: colors.foreground, comment: colors.foregroundMuted, string: colors.statusSuccess, keyword: colors.accent, number: colors.statusWarning, type: colors.statusWarning, function: colors.accent };
   const handleSide = line.next === undefined ? "old" : "new", handleLine = (line.next ?? line.old)!;
   return <View {...codeSelectionProps(selectionScope, row.path, line.old, line.next)} onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)} onLayout={(event) => onHeight(event.nativeEvent.layout.height)} style={{ minHeight: lineHeight, flexDirection: "row", alignItems: "flex-start", paddingRight: 8,
-    backgroundColor: selected ? diffBackground(colors.accent, colors.surface0) : add || remove ? diffBackground(tone, colors.surface0) : colors.surface0, borderLeftWidth: 3, borderLeftColor: selected ? colors.accent : match ? colors.statusWarning : add || remove ? tone : "transparent" }}>
-    <View accessible accessibilityRole="button" accessibilityLabel={t("dragCodeSelection", { path: row.path, line: handleLine, side: t(handleSide === "old" ? "versionOld" : "versionNew") })} accessibilityActions={[{ name: "activate" }]} onAccessibilityTap={() => onSelect?.(handleSide, handleLine)} onAccessibilityAction={() => onSelect?.(handleSide, handleLine)}
+    backgroundColor: selected ? diffBackground(colors.accent, reviewPalette.background) : add ? reviewPalette.added : remove ? reviewPalette.removed : reviewPalette.background, borderLeftWidth: 3, borderLeftColor: selected ? colors.accent : match ? colors.statusWarning : add || remove ? tone : "transparent" }}>
+    <View {...selectionHandleProps} accessible accessibilityRole="button" accessibilityLabel={t("dragCodeSelection", { path: row.path, line: handleLine, side: t(handleSide === "old" ? "versionOld" : "versionNew") })} accessibilityActions={[{ name: "activate" }]} onAccessibilityTap={() => onSelect?.(handleSide, handleLine)} onAccessibilityAction={() => onSelect?.(handleSide, handleLine)}
       onStartShouldSetResponder={() => !!onDragStart} onMoveShouldSetResponder={() => !!onDragStart} onResponderTerminationRequest={() => false}
       onResponderGrant={(event) => { event.preventDefault(); const pageY = event.nativeEvent.pageY; onDragStart?.(row.path, handleSide, handleLine, pageY); }}
       onResponderMove={(event) => { event.preventDefault(); const pageY = event.nativeEvent.pageY; onDragMove?.(pageY); }} onResponderRelease={() => onDragEnd?.()} onResponderTerminate={() => onDragEnd?.()}

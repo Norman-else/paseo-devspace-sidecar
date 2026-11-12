@@ -8,10 +8,10 @@ export const HEADER_HEIGHT = 36;
 export type ReviewRow =
   | { kind: "header"; file: ReviewFile; path: string; key: string; height: number }
   | { kind: "code"; line: DiffLine; tokens: CodeToken[]; path: string; key: string; height: number }
-  | { kind: "gap"; omitted: number; label: string; path: string; key: string; height: number; oldStart: number; newStart: number; side: "old" | "new" }
+  | { kind: "gap"; omitted: number; count: number; loaded: number; expanded: boolean; label: string; path: string; key: string; height: number; oldStart: number; newStart: number; side: "old" | "new" }
   | { kind: "thread"; thread: ReviewThread; path: string; key: string; height: number }
   | { kind: "notice"; text: string; deferred: boolean; path: string; key: string; height: number };
-export type ReviewExtras = { contexts?: Record<string, { lines: string[]; total: number }>; threads?: ReviewThread[]; expandedThreads?: ReadonlySet<string>; anchors?: Record<string, { path: string; side: "old" | "new"; start: number; lines: string[] }> };
+export type ReviewExtras = { contexts?: Record<string, { lines: string[]; total: number; expanded?: boolean }>; threads?: ReviewThread[]; expandedThreads?: ReadonlySet<string>; anchors?: Record<string, { path: string; side: "old" | "new"; start: number; lines: string[] }> };
 export function reviewRows(files: ReviewFile[], collapsed: ReadonlySet<string>, wrapWidth?: number, measured?: ReadonlyMap<string, number>, typography: CodeAppearance = codeAppearance(null), extras: ReviewExtras = {}) {
   const rows: ReviewRow[] = [], offsets: number[] = [], headers: number[] = [];
   const fileIndices = new Map<string, number>();
@@ -49,11 +49,11 @@ export function reviewRows(files: ReviewFile[], collapsed: ReadonlySet<string>, 
     }
     function gap(oldStart: number, newStart: number, omitted: number, label: string, tail = false) {
       const key = `${file.path}:gap:${oldStart}:${newStart}`, context = extras.contexts?.[key];
-      context?.lines.forEach((text, index) => code({ kind: "context", text: " " + text, old: file.status === "A" ? undefined : oldStart + index, next: file.status === "D" ? undefined : newStart + index }));
-      const count = context?.lines.length ?? 0, side = file.status === "D" ? "old" : "new";
-      const remaining = tail ? context ? Math.max(0, context.total - (side === "old" ? oldStart : newStart) + 1 - count) : -1 : Math.max(0, omitted - count);
-      if (tail && remaining === 0) return;
-      add({ kind: "gap", path: file.path, key, omitted: remaining, label, oldStart, newStart, side, height: 32 });
+      const loaded = context?.lines.length ?? 0, side = file.status === "D" ? "old" : "new", expanded = loaded > 0 && context?.expanded !== false;
+      const count = tail ? context ? Math.max(0, context.total - (side === "old" ? oldStart : newStart) + 1) : -1 : omitted;
+      if (tail && count === 0) return;
+      add({ kind: "gap", path: file.path, key, count, loaded, expanded, omitted: count < 0 ? -1 : Math.max(0, count - (expanded ? loaded : 0)), label, oldStart, newStart, side, height: 32 });
+      if (expanded) context!.lines.forEach((text, index) => code({ kind: "context", text: " " + text, old: file.status === "A" ? undefined : oldStart + index, next: file.status === "D" ? undefined : newStart + index }));
     }
     for (const line of diffLines(file.patch)) {
       if (line.kind === "hunk") {
@@ -71,7 +71,7 @@ export function reviewRows(files: ReviewFile[], collapsed: ReadonlySet<string>, 
     if (file.patch && (oldEnd || newEnd)) gap(oldEnd + 1, newEnd + 1, -1, "", true);
     for (const [id, anchor] of Object.entries(extras.anchors ?? {})) {
       if (anchor.path !== file.path || shownThreads.has(id)) continue;
-      add({ kind: "gap", path: file.path, key: `anchor:${id}`, omitted: 0, label: "__discussion__", oldStart: 0, newStart: 0, side: anchor.side, height: 32 });
+      add({ kind: "gap", path: file.path, key: `anchor:${id}`, count: 0, loaded: 0, expanded: false, omitted: 0, label: "__discussion__", oldStart: 0, newStart: 0, side: anchor.side, height: 32 });
       anchor.lines.forEach((text, index) => code({ kind: "context", text: " " + text, ...(anchor.side === "old" ? { old: anchor.start + index } : { next: anchor.start + index }) }, `anchor:${id}:`));
     }
   }
