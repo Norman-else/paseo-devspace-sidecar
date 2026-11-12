@@ -16,6 +16,7 @@ export function reviewRows(files: ReviewFile[], collapsed: ReadonlySet<string>, 
   const rows: ReviewRow[] = [], offsets: number[] = [], headers: number[] = [];
   const fileIndices = new Map<string, number>();
   let offset = 0;
+  const gapHeight = Math.max(32, typography.lineHeight + 10);
   function add(row: ReviewRow) {
     row.height = measured?.get(row.key) ?? row.height;
     offsets.push(offset); offset += row.height; rows.push(row);
@@ -52,7 +53,7 @@ export function reviewRows(files: ReviewFile[], collapsed: ReadonlySet<string>, 
       const loaded = context?.lines.length ?? 0, side = file.status === "D" ? "old" : "new", expanded = loaded > 0 && context?.expanded !== false;
       const count = tail ? context ? Math.max(0, context.total - (side === "old" ? oldStart : newStart) + 1) : -1 : omitted;
       if (tail && count === 0) return;
-      add({ kind: "gap", path: file.path, key, count, loaded, expanded, omitted: count < 0 ? -1 : Math.max(0, count - (expanded ? loaded : 0)), label, oldStart, newStart, side, height: 32 });
+      add({ kind: "gap", path: file.path, key, count, loaded, expanded, omitted: count < 0 ? -1 : Math.max(0, count - (expanded ? loaded : 0)), label, oldStart, newStart, side, height: gapHeight });
       if (expanded) context!.lines.forEach((text, index) => code({ kind: "context", text: " " + text, old: file.status === "A" ? undefined : oldStart + index, next: file.status === "D" ? undefined : newStart + index }));
     }
     for (const line of diffLines(file.patch)) {
@@ -71,7 +72,7 @@ export function reviewRows(files: ReviewFile[], collapsed: ReadonlySet<string>, 
     if (file.patch && (oldEnd || newEnd)) gap(oldEnd + 1, newEnd + 1, -1, "", true);
     for (const [id, anchor] of Object.entries(extras.anchors ?? {})) {
       if (anchor.path !== file.path || shownThreads.has(id)) continue;
-      add({ kind: "gap", path: file.path, key: `anchor:${id}`, count: 0, loaded: 0, expanded: false, omitted: 0, label: "__discussion__", oldStart: 0, newStart: 0, side: anchor.side, height: 32 });
+      add({ kind: "gap", path: file.path, key: `anchor:${id}`, count: 0, loaded: 0, expanded: false, omitted: 0, label: "__discussion__", oldStart: 0, newStart: 0, side: anchor.side, height: gapHeight });
       anchor.lines.forEach((text, index) => code({ kind: "context", text: " " + text, ...(anchor.side === "old" ? { old: anchor.start + index } : { next: anchor.start + index }) }, `anchor:${id}:`));
     }
   }
