@@ -1,4 +1,4 @@
-import { Platform } from "react-native";
+import { Platform, type ViewStyle } from "react-native";
 import { codeAppearance, type CodeAppearance } from "../shared/appearance";
 
 // Paseo 0.15.x exposes only colors through PluginTheme. Keep its read-only web
@@ -15,6 +15,8 @@ type CursorStyle = { textContent: string; remove(): void };
 declare const document: { documentElement: object; head: { appendChild(style: CursorStyle): void }; createElement(tag: "style"): CursorStyle };
 declare const MutationObserver: new (callback: () => void) => { observe(target: object, options: { attributes: boolean; attributeFilter: string[] }): void; disconnect(): void };
 
+// Reserve classic desktop scrollbars before content is measured; native indicators stay host-owned.
+export const stableScrollbarStyle = Platform.OS === "web" ? ({ scrollbarGutter: "stable" } as unknown as ViewStyle) : undefined;
 export const codeScopeProps = Platform.OS === "web" ? { dataSet: { pmono: "true" } } : {};
 export const selectionHandleProps = Platform.OS === "web" ? { dataSet: { devspaceSelectHandle: "true" } } : {};
 export function readCodeAppearance(fallback: string): CodeAppearance {

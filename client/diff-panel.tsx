@@ -10,6 +10,7 @@ import { HEADER_HEIGHT, reviewRows, type ReviewRow, type ReviewExtras } from "..
 import { selectedCode, selectedLines, selectLine } from "../shared/selection";
 import { CodeLine, FileHeader, FileIndex, ToolButton } from "./review-ui";
 import { DIVIDER_WIDTH, ResizeDivider } from "./resize-divider";
+import { SCROLLBAR_CLEARANCE, useScrollContentWidth } from "./use-scroll-content-width";
 import { useRowMeasurements } from "./use-row-measurements";
 import { useMessages } from "./messages";
 import { useCodeAppearance } from "./use-code-appearance";
@@ -21,7 +22,7 @@ import { useStickyFileHeader } from "./use-sticky-file-header";
 import { Discussions, InlineDiscussion } from "./review-discussions";
 import { FeedbackComposer, type FeedbackDraft } from "./feedback-composer";
 import { ReviewOptions } from "./review-options";
-import { clearNativeCodeSelection, installSelectionCursor, watchCodeSelection } from "./web";
+import { clearNativeCodeSelection, installSelectionCursor, watchCodeSelection, stableScrollbarStyle } from "./web";
 import { ReviewTabs } from "./review-tabs";
 import { FloatingSelectionActions } from "./floating-selection-actions";
 import { useCodeSelection } from "./use-code-selection";
@@ -90,16 +91,17 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
   const indexShown = wide && state.indexVisible;
   const indexWidth = indexShown ? Math.max(140, Math.min(maxIndexWidth, dragWidth ?? state.indexWidth ?? Math.min(210, Math.max(150, size.width * 0.26)))) : 0;
   const viewportWidth = Math.max(100, size.width - indexWidth - (indexShown ? DIVIDER_WIDTH : 0));
+  const scrollContent = useScrollContentWidth(viewportWidth), contentWidth = scrollContent.width;
   useEffect(() => { if (wide) setIndexOpen(false); }, [wide]);
-  const layoutKey = `${viewportWidth}:${typography.fontFamily}:${typography.fontSize}:${version}`;
+  const layoutKey = `${contentWidth}:${typography.fontFamily}:${typography.fontSize}:${version}`;
   const { heights, report } = useRowMeasurements(layoutKey);
   const inlineAvailable = comparison === "pr" && !since && !!discussions.data && !!document.data?.snapshot.headSha && discussions.data.headSha === document.data.snapshot.headSha;
   const currentThreads = useMemo(() => discussions.data?.threads.filter((thread) => !thread.outdated) ?? [], [discussions.data]);
   const inlineThreads = useMemo(() => inlineAvailable ? currentThreads : [], [inlineAvailable, currentThreads]);
   const expandedThreads = useMemo(() => new Set(openedThreads.version === version ? openedThreads.ids : []), [openedThreads, version]);
-  const model = useMemo(() => reviewRows(files, searchType === "code" && search ? new Set() : collapsed, Math.max(1, viewportWidth - typography.gutterWidth - 8), heights, typography, { contexts: extra.version === version ? extra.contexts : {}, threads: inlineThreads, expandedThreads, anchors: anchors.version === version ? anchors.values : {} }), [expandedThreads, anchors, files, collapsed, viewportWidth, heights, typography, extra, version, inlineThreads, searchType, search]);
+  const model = useMemo(() => reviewRows(files, searchType === "code" && search ? new Set() : collapsed, Math.max(1, contentWidth - typography.gutterWidth - 8), heights, typography, { contexts: extra.version === version ? extra.contexts : {}, threads: inlineThreads, expandedThreads, anchors: anchors.version === version ? anchors.values : {} }), [expandedThreads, anchors, files, collapsed, contentWidth, heights, typography, extra, version, inlineThreads, searchType, search]);
   const list = useRef<NativeFlatList<ReviewRow>>(null), sticky = useStickyFileHeader(model, setActivePath);
-  const codeSelection = useCodeSelection({ model, width: viewportWidth, height: size.height, gutterWidth: typography.gutterWidth, scope: version, list });
+  const codeSelection = useCodeSelection({ model, width: contentWidth, height: size.height, gutterWidth: typography.gutterWidth, scope: version, list });
   const { selection, setSelection } = codeSelection;
   useEffect(() => { sticky.reset(); codeSelection.onScroll(0); list.current?.scrollToOffset({ offset: 0, animated: false }); }, [scope, since]);
   useEffect(() => { setSelection(null); }, [version, search, state.filter]);
@@ -245,16 +247,16 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
     }}>
       {document.data && bound ? <>
         <View testID="devspace-code-viewport" ref={codeSelection.viewport} onLayout={codeSelection.measureViewport} style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: "hidden", backgroundColor: reviewColors.surface0 }}>
-          <FlatList<ReviewRow> ref={list} data={model.rows} style={{ flex: 1, width: viewportWidth, height: size.height }} keyExtractor={(row) => row.key} initialNumToRender={55} maxToRenderPerBatch={55} windowSize={9}
+          <FlatList<ReviewRow> testID="devspace-code-list" ref={list} data={model.rows} ListHeaderComponent={scrollContent.sizer} contentContainerStyle={{ paddingRight: SCROLLBAR_CLEARANCE }} style={[stableScrollbarStyle, { flex: 1, width: viewportWidth, height: size.height }]} keyExtractor={(row) => row.key} initialNumToRender={55} maxToRenderPerBatch={55} windowSize={9}
             getItemLayout={(_, index) => ({ length: model.rows[index]?.height ?? 20, offset: model.offsets[index] ?? 0, index })} scrollEnabled={!codeSelection.dragging} onScroll={(event) => { if (view === "changes") { const offset = event.nativeEvent.contentOffset.y; sticky.onScroll(event); codeSelection.onScroll(offset); } }} scrollEventThrottle={16}
             ListEmptyComponent={<Text style={{ color: colors.foregroundMuted, padding: 20, fontSize: 12 }}>{t(search ? "noMatches" : since ? "emptyCheckpoint" : "noChanges")}</Text>}
-            renderItem={({ item: row }) => row.kind === "header" ? <FileHeader {...commentProps(row.file)} file={row.file} width={viewportWidth} colors={reviewColors} collapsed={collapsed.has(row.path)} reviewed={!!row.file.hash && reviewed[row.path] === row.file.hash} onToggle={() => toggle(row.path)} onReview={() => mark(row.file)} />
+            renderItem={({ item: row }) => row.kind === "header" ? <FileHeader {...commentProps(row.file)} file={row.file} width={contentWidth} colors={reviewColors} collapsed={collapsed.has(row.path)} reviewed={!!row.file.hash && reviewed[row.path] === row.file.hash} onToggle={() => toggle(row.path)} onReview={() => mark(row.file)} />
               : row.kind === "code" ? <CodeLine compact={!wide} onDragStart={codeSelection.start} onDragMove={codeSelection.move} onDragEnd={codeSelection.end} row={row} colors={reviewColors} typography={typography} selectionScope={version} selection={selection} match={searchType === "code" && !!search && row.line.text.toLowerCase().includes(search.toLowerCase())} onSelect={(side, line) => { if (!selection) toast.show(t("selectionHint")); setSelection((previous) => selectLine(previous, row.path, side, line)); }} onHeight={(height) => report(row.key, height, layoutKey)} />
               : row.kind === "thread" ? <InlineDiscussion thread={row.thread} expanded={expandedThreads.has(row.thread.id)} onToggle={() => toggleThread(row.thread.id)} colors={reviewColors} onFeedback={threadFeedback} onHeight={(height) => report(row.key, height, layoutKey)} />
               : row.kind === "gap" ? <ContextGap row={row} colors={reviewColors} typography={typography} loading={loadingContext === row.key} disabled={!!loadingContext} onToggle={() => void expandContext(row)} onMore={() => void expandContext(row, true)} />
-              : <Pressable accessibilityRole={row.deferred ? "button" : undefined} onPress={() => { if (row.deferred) void load(row.path); }} style={{ width: viewportWidth, minHeight: row.height, paddingHorizontal: 12, justifyContent: "center" }}><Text style={{ color: row.deferred ? colors.accent : colors.foregroundMuted, fontSize: 11 }}>{translateBackend(row.text)}</Text></Pressable>}
+              : <Pressable accessibilityRole={row.deferred ? "button" : undefined} onPress={() => { if (row.deferred) void load(row.path); }} style={{ width: contentWidth, minHeight: row.height, paddingHorizontal: 12, justifyContent: "center" }}><Text style={{ color: row.deferred ? colors.accent : colors.foregroundMuted, fontSize: 11 }}>{translateBackend(row.text)}</Text></Pressable>}
           />
-          {sticky.file ? <Animated.View style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, transform: [{ translateY: sticky.translateY }] }} testID="devspace-sticky-file-header"><FileHeader {...commentProps(sticky.file)} file={sticky.file} width={viewportWidth} colors={reviewColors} collapsed={collapsed.has(sticky.file.path)} reviewed={!!sticky.file.hash && reviewed[sticky.file.path] === sticky.file.hash} onToggle={() => toggle(sticky.file!.path)} onReview={() => mark(sticky.file!)} /></Animated.View> : null}
+          {sticky.file ? <Animated.View style={{ position: "absolute", top: 0, left: 0, width: contentWidth, zIndex: 1, transform: [{ translateY: sticky.translateY }] }} testID="devspace-sticky-file-header"><FileHeader {...commentProps(sticky.file)} file={sticky.file} width={contentWidth} colors={reviewColors} collapsed={collapsed.has(sticky.file.path)} reviewed={!!sticky.file.hash && reviewed[sticky.file.path] === sticky.file.hash} onToggle={() => toggle(sticky.file!.path)} onReview={() => mark(sticky.file!)} /></Animated.View> : null}
           {view === "changes" && !draft && selection && codeSelection.visible ? <FloatingSelectionActions colors={reviewColors} compact={!wide} x={codeSelection.x} y={codeSelection.y} width={codeSelection.width} onHeight={codeSelection.measureToolbar} onExplain={() => codeFeedback("explain")} onChange={() => codeFeedback("change")} onCopy={() => { void copyText(selectedCode(model.rows, selection, Infinity)).then(() => toast.show(t("copiedCode"))).catch(() => toast.error(t("feedbackError"))); }} onClose={() => { clearNativeCodeSelection(); setSelection(null); }} /> : null}
         </View>
         {indexShown ? <><ResizeDivider width={indexWidth} min={140} max={maxIndexWidth} colors={reviewColors} onResize={setDragWidth} onCommit={(width) => { save({ ...latestState.current, indexWidth: width }); setDragWidth(null); }} /><View testID="devspace-file-index" style={{ width: indexWidth, flexShrink: 0, backgroundColor: reviewColors.surface0 }}><FileIndex files={files} activePath={selected} reviewed={reviewed} colors={reviewColors} onJump={navigate} /></View></>

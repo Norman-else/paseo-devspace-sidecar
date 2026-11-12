@@ -29,3 +29,24 @@ test("panel layout handlers retain dimensions after native events are recycled",
     assert.ok(state.width === 393 || state.height === 492);
   }
 });
+
+test("scroll content measurement captures native width before its event is recycled", () => {
+  const source = readFileSync(new URL("../client/use-scroll-content-width.tsx", import.meta.url), "utf8");
+  const tree = ts.createSourceFile("use-scroll-content-width.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let callback = "";
+  const visit = (node: ts.Node) => {
+    if (ts.isVariableDeclaration(node) && node.name.getText(tree) === "onLayout" && node.initializer && ts.isCallExpression(node.initializer)) callback = node.initializer.arguments[0].getText(tree);
+    ts.forEachChild(node, visit);
+  };
+  visit(tree); assert.ok(callback);
+  type Measurement = { viewportWidth: number; width: number } | null;
+  const queued: ((previous: Measurement) => Measurement)[] = [];
+  const module = { exports: null as unknown as (event: unknown) => void };
+  const code = ts.transpileModule(`module.exports = ${callback}`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
+  new Function("viewportWidth", "setMeasured", "module", code)(882, (update: typeof queued[number]) => queued.push(update), module);
+  const event: { nativeEvent: null | { layout: { width: number } } } = { nativeEvent: { layout: { width: 850 } } };
+  module.exports(event); event.nativeEvent = null;
+  assert.deepEqual(queued[0](null), { viewportWidth: 882, width: 850 });
+  module.exports({ nativeEvent: { layout: { width: 0 } } });
+  assert.equal(queued.length, 1, "a temporarily hidden list must not erase its last usable width");
+});
