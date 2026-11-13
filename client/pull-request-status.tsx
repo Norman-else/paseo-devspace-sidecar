@@ -2,6 +2,7 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { ExternalLink, Icon, ScrollView } from "@getpaseo/plugin/client/ui";
 import type { PullRequest, PullRequestResult } from "../shared/pull-request";
 import { diffBackground } from "../shared/appearance";
+import { MergePrAction } from "./merge-pr-action";
 import { ChecksPopover } from "./checks-popover";
 import type { CheckDetail } from "../shared/review-details";
 import type { Colors } from "./review-ui";
@@ -9,8 +10,8 @@ import { useCodeAppearance } from "./use-code-appearance";
 import { useMessages } from "./messages";
 
 type Available = Extract<PullRequestResult, { status: "available" }>;
-export function PullRequestStatus({ result, loading, error, colors, compact = false, selectedNumber, onSelect, workspaceId, maxChecksHeight, maxChecksWidth, onCheckFeedback }: {
-  result?: PullRequestResult; loading: boolean; error: Error | null; colors: Colors; compact?: boolean; selectedNumber?: number; onSelect?(number: number): void; workspaceId?: string; maxChecksHeight?: number; maxChecksWidth?: number; onCheckFeedback?(check: CheckDetail): void;
+export function PullRequestStatus({ result, loading, error, colors, compact = false, selectedNumber, onSelect, workspaceId, maxChecksHeight, maxChecksWidth, onCheckFeedback, hostId, onPrUpdated, mergeReady }: {
+  result?: PullRequestResult; loading: boolean; error: Error | null; colors: Colors; compact?: boolean; selectedNumber?: number; onSelect?(number: number): void; workspaceId?: string; maxChecksHeight?: number; maxChecksWidth?: number; onCheckFeedback?(check: CheckDetail): void; hostId?: string; onPrUpdated?(): void; mergeReady?: boolean;
 }) {
   const { t } = useMessages();
   const note = { paddingHorizontal: 12, paddingVertical: 10, gap: 8, flexDirection: "row" as const, alignItems: "center" as const, borderBottomWidth: 1, borderColor: colors.border };
@@ -31,11 +32,11 @@ export function PullRequestStatus({ result, loading, error, colors, compact = fa
         <Text style={{ fontSize: 11, color: active.number === pr.number ? colors.foreground : colors.foregroundMuted }}>#{pr.number} → {pr.baseBranch}</Text>
       </Pressable>)}
     </ScrollView> : null}
-    <PullRequestSummary key={active.number} pr={active} result={result} colors={colors} compact={compact} workspaceId={workspaceId} maxChecksHeight={maxChecksHeight} maxChecksWidth={maxChecksWidth} onCheckFeedback={onCheckFeedback} />
+    <PullRequestSummary key={active.number} pr={active} result={result} colors={colors} compact={compact} workspaceId={workspaceId} maxChecksHeight={maxChecksHeight} maxChecksWidth={maxChecksWidth} onCheckFeedback={onCheckFeedback} hostId={hostId} onPrUpdated={onPrUpdated} mergeReady={mergeReady} />
   </View>;
 }
 
-function PullRequestSummary({ pr, result, colors, compact, workspaceId, maxChecksHeight, maxChecksWidth, onCheckFeedback }: { pr: PullRequest; result: Available; colors: Colors; compact: boolean; workspaceId?: string; maxChecksHeight?: number; maxChecksWidth?: number; onCheckFeedback?(check: CheckDetail): void }) {
+function PullRequestSummary({ pr, result, colors, compact, workspaceId, maxChecksHeight, maxChecksWidth, onCheckFeedback, hostId, onPrUpdated, mergeReady }: { pr: PullRequest; result: Available; colors: Colors; compact: boolean; workspaceId?: string; maxChecksHeight?: number; maxChecksWidth?: number; onCheckFeedback?(check: CheckDetail): void; hostId?: string; onPrUpdated?(): void; mergeReady?: boolean }) {
   const { t } = useMessages();
   const stateKey = { OPEN: "prOpen", DRAFT: "prDraft", MERGED: "prMerged", CLOSED: "prClosed" } as const;
   const tone = pr.state === "OPEN" ? colors.statusSuccess : pr.state === "CLOSED" ? colors.statusDanger : pr.state === "MERGED" ? colors.accent : colors.foregroundMuted;
@@ -58,7 +59,8 @@ function PullRequestSummary({ pr, result, colors, compact, workspaceId, maxCheck
     </View>
     {compact ? <View style={{ alignItems: "flex-start" }}><BranchComparison source={result.branch} target={pr.baseBranch} colors={colors} /></View> : null}
     <Text numberOfLines={2} style={{ color: colors.foreground, fontSize: 13, fontWeight: "500", lineHeight: 19 }}>{pr.title}</Text>
-    <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+      <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: 12, rowGap: 6 }}>
       {workspaceId && checks.total ? <ChecksPopover key={`${pr.number}:${pr.headSha}`} label={checksLabel} icon={checks.status === "passed" ? "CircleCheck" : checks.status === "failed" ? "CircleX" : "CircleDot"} tone={checkTone} workspaceId={workspaceId} number={pr.number} headSha={pr.headSha} checks={checks} colors={colors} maxWidth={maxChecksWidth} maxHeight={maxChecksHeight} onFeedback={onCheckFeedback} />
         : <StatusBadge label={checksLabel} icon={checks.status === "passed" ? "CircleCheck" : checks.status === "failed" ? "CircleX" : "CircleDot"} tone={checkTone} colors={colors} />}
       {checks.skipped > 0 && checks.status !== "skipped" ? <StatusBadge label={t("prSkippedCount", { count: checks.skipped })} tone={colors.foregroundMuted} colors={colors} /> : null}
@@ -67,6 +69,8 @@ function PullRequestSummary({ pr, result, colors, compact, workspaceId, maxCheck
         icon={pr.review === "APPROVED" ? "CheckCheck" : "MessageSquare"}
         tone={pr.review === "APPROVED" ? colors.statusSuccess : pr.review === "CHANGES_REQUESTED" ? colors.statusDanger : colors.statusWarning} colors={colors} /> : null}
       {pr.conflicts && pr.state === "OPEN" ? <StatusBadge label={t("prConflicts")} icon="CircleAlert" tone={colors.statusDanger} colors={colors} /> : null}
+      </View>
+      {pr.state === "OPEN" && workspaceId && hostId ? <MergePrAction key={`${pr.number}:${pr.headSha}:${pr.baseBranch}`} workspaceId={workspaceId} repository={result.repository} number={pr.number} headSha={pr.headSha} baseBranch={pr.baseBranch} colors={colors} compact={compact} hostId={hostId} ready={mergeReady ?? true} onUpdated={onPrUpdated} /> : null}
     </View>
 
   </>;

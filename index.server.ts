@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { startBridge } from "./server/bridge";
 import { LocalDiff } from "./server/git";
 import { RemoteSources } from "./server/remote-sources";
-import { threadsRpc, checkDetailRpc, contextRpc, checkpointRpc } from "./shared/diff";
+import { mergeOptionsRpc, mergePrRpc, mergeStatusRpc, threadsRpc, checkDetailRpc, contextRpc, checkpointRpc } from "./shared/diff";
 
 export default function contribute(server: PluginServerContext) {
   const ready = loadConfig().then(async (config) => {
@@ -39,6 +39,9 @@ export default function contribute(server: PluginServerContext) {
   server.handle(fileRpc, async (input) => fileResultSchema.parse(await (await ready).request({ op: "file", ...input })));
   server.handle(reviewRpc, async (input) => reviewSchema.parse(await (await ready).request({ op: "review", ...input })));
   server.handle(pullRequestRpc, async (input) => pullRequestResultSchema.parse(await (await ready).request({ op: "pull-requests", ...input })));
+  server.handle(mergeOptionsRpc, async (input) => mergeOptionsRpc.output.parse(await (await ready).request({ op: "merge-options", ...input })));
+  server.handle(mergePrRpc, async (input) => mergePrRpc.output.parse(await (await ready).request({ op: "merge-pr", ...input })));
+  server.handle(mergeStatusRpc, async (input) => mergeStatusRpc.output.parse(await (await ready).request({ op: "merge-status", ...input })));
   server.handle(threadsRpc, async (input) => threadsRpc.output.parse(await (await ready).request({ op: "threads", ...input })));
   server.handle(checkDetailRpc, async (input) => checkDetailRpc.output.parse(await (await ready).request({ op: "check-detail", ...input })));
   server.handle(contextRpc, async (input) => contextRpc.output.parse(await (await ready).request({ op: "context", ...input })));

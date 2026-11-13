@@ -8,6 +8,8 @@ import { promisify } from "node:util";
 import type { BridgeRequest, ChangedFile, Review, ReviewFile, Snapshot, Workspace } from "../shared/diff";
 import { workspaceEmptyMessages, type WorkspaceEmptyReason } from "../shared/diff";
 import { isRelativeFile, isWithin, samePath } from "./paths";
+import { GitHubMerge } from "./github-merge";
+import type { MergeRequest } from "../shared/pr-merge";
 import { PullRequests } from "./pull-requests";
 import { GitHubReview } from "./github-review";
 import { Checkpoints } from "./checkpoints";
@@ -29,8 +31,10 @@ export class LocalDiff {
   private github: PullRequests;
   private githubReview: GitHubReview;
   private checkpoints: Checkpoints;
+  private merger: GitHubMerge;
   private pullCache = new Map<string, { expires: number; value: ReturnType<LocalDiff["readPullRequests"]> }>();
-  constructor(private databasePath: string, stateDirectory = join(homedir(), ".config/paseo-devspace-sidecar/reviews"), dependencies?: { github?: PullRequests; review?: GitHubReview }) {
+  constructor(private databasePath: string, stateDirectory = join(homedir(), ".config/paseo-devspace-sidecar/reviews"), dependencies?: { github?: PullRequests; review?: GitHubReview; merger?: GitHubMerge }) {
+    this.merger = dependencies?.merger ?? new GitHubMerge();
     this.github = dependencies?.github ?? new PullRequests(); this.githubReview = dependencies?.review ?? new GitHubReview(); this.checkpoints = new Checkpoints(stateDirectory);
   }
   private rows(): StoredWorkspace[] {
@@ -322,12 +326,32 @@ export class LocalDiff {
     if (!entry) throw new Error("Check is no longer associated with this PR.");
     return { ...await this.githubReview.check(root, result.repository, pr.headSha, name, url, entry.summary), headSha: pr.headSha };
   }
+  private async mergeContext(id: string, number: number) {
+    this.pullCache.clear();
+    const { root, workspace } = await this.workspace(id);
+    const { result, pr } = await this.knownPr(id, number);
+    if (!workspace.branch) throw new Error("PR is no longer associated with this workspace.");
+    return { root, repository: result.repository, number: pr.number, sourceBranch: workspace.branch };
+  }
+  async mergeOptions(id: string, number: number) { return this.merger.options(await this.mergeContext(id, number)); }
+  async mergePr(input: MergeRequest) {
+    const value = await this.merger.merge(input, () => this.mergeContext(input.workspaceId, input.prNumber));
+    this.pullCache.clear(); return value;
+  }
+  async mergeStatus(id: string, number: number, requestId: string) {
+    const value = await this.merger.status(id, number, requestId);
+    if (value.status === "merged" || value.status === "failed") this.pullCache.clear();
+    return value;
+  }
   dispatch(input: BridgeRequest): Promise<unknown> {
     if (input.op === "catalog") return this.catalog();
     if (input.op === "inspect") return this.inspect(input.workspaceId);
     if (input.op === "snapshot") return this.snapshot(input.workspaceId, input.comparison, input);
     if (input.op === "review") return this.review(input.workspaceId, input.comparison, input);
     if (input.op === "pull-requests") return this.pullRequests(input.workspaceId);
+    if (input.op === "merge-options") return this.mergeOptions(input.workspaceId, input.prNumber);
+    if (input.op === "merge-pr") return this.mergePr(input);
+    if (input.op === "merge-status") return this.mergeStatus(input.workspaceId, input.prNumber, input.requestId);
     if (input.op === "context") return this.context(input);
     if (input.op === "checkpoint") return this.checkpoint(input.workspaceId, input.comparison, input.agentId, input.prNumber);
     if (input.op === "threads") return this.discussions(input.workspaceId, input.prNumber);

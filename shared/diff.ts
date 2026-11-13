@@ -1,5 +1,6 @@
 import { defineRpc } from "@getpaseo/plugin";
 import { z } from "zod";
+import { mergeOptionsSchema, mergeOutcomeSchema, mergeRequestFields } from "./pr-merge";
 import { pullRequestResultSchema } from "./pull-request";
 import { reviewOptions, discussionSchema, checkDetailSchema, contextSchema, checkpointSchema } from "./review-details";
 
@@ -55,11 +56,14 @@ export const fileRpc = defineRpc({
 });
 export const reviewRpc = defineRpc({ name: "diff.review", input: z.object({ workspaceId, comparison, ...reviewOptions }), output: reviewSchema });
 export const pullRequestRpc = defineRpc({ name: "github.pull-requests", input: z.object({ workspaceId }), output: pullRequestResultSchema });
+export const mergeOptionsRpc = defineRpc({ name: "github.merge-options", input: z.object({ workspaceId, prNumber: z.number().int().positive() }), output: mergeOptionsSchema });
+export const mergePrRpc = defineRpc({ name: "github.merge-pr", input: z.object({ workspaceId, prNumber: z.number().int().positive(), ...mergeRequestFields }), output: mergeOutcomeSchema });
+export const mergeStatusRpc = defineRpc({ name: "github.merge-status", input: z.object({ workspaceId, prNumber: z.number().int().positive(), requestId: mergeRequestFields.requestId }), output: mergeOutcomeSchema });
 export const threadsRpc = defineRpc({ name: "github.discussions", input: z.object({ workspaceId, prNumber: z.number().int().positive() }), output: discussionSchema });
 export const checkDetailRpc = defineRpc({ name: "github.check-detail", input: z.object({ workspaceId, prNumber: z.number().int().positive(), name: z.string().max(500), url: z.string().url().nullable() }), output: checkDetailSchema });
 export const contextRpc = defineRpc({ name: "diff.context", input: z.object({ workspaceId, comparison, ...reviewOptions, path: z.string().min(1), side: z.enum(["old", "new"]), start: z.number().int().min(1), count: z.number().int().min(1).max(200), revision: z.string() }), output: contextSchema });
 export const checkpointRpc = defineRpc({ name: "diff.checkpoint", input: z.object({ workspaceId, comparison, prNumber: z.number().int().positive().optional(), agentId: z.string().min(1).max(200) }), output: checkpointSchema });
-// Project operations stay read-only; checkpoints write only private sidecar state.
+// Git reads stay local and read-only; GitHub merge writes require an explicit merge-pr request.
 export const bridgeRequest = z.discriminatedUnion("op", [
   z.object({ op: z.literal("catalog") }),
   z.object({ op: z.literal("inspect"), workspaceId }),
@@ -67,6 +71,9 @@ export const bridgeRequest = z.discriminatedUnion("op", [
   z.object({ op: z.literal("review"), workspaceId, comparison, ...reviewOptions }),
   z.object({ op: z.literal("pull-requests"), workspaceId }),
   z.object({ op: z.literal("file"), workspaceId, comparison, path: z.string().min(1), ...reviewOptions }),
+  mergeOptionsRpc.input.extend({ op: z.literal("merge-options") }),
+  mergePrRpc.input.extend({ op: z.literal("merge-pr") }),
+  mergeStatusRpc.input.extend({ op: z.literal("merge-status") }),
   contextRpc.input.extend({ op: z.literal("context") }),
   threadsRpc.input.extend({ op: z.literal("threads") }),
   checkDetailRpc.input.extend({ op: z.literal("check-detail") }),
