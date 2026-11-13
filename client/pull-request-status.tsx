@@ -10,8 +10,8 @@ import { useCodeAppearance } from "./use-code-appearance";
 import { useMessages } from "./messages";
 
 type Available = Extract<PullRequestResult, { status: "available" }>;
-export function PullRequestStatus({ result, loading, error, colors, compact = false, selectedNumber, onSelect, workspaceId, maxChecksHeight, maxChecksWidth, onCheckFeedback, hostId, onPrUpdated, mergeReady }: {
-  result?: PullRequestResult; loading: boolean; error: Error | null; colors: Colors; compact?: boolean; selectedNumber?: number; onSelect?(number: number): void; workspaceId?: string; maxChecksHeight?: number; maxChecksWidth?: number; onCheckFeedback?(check: CheckDetail): void; hostId?: string; onPrUpdated?(): void; mergeReady?: boolean;
+export function PullRequestStatus({ result, loading, error, colors, compact = false, selectedNumber, onSelect, workspaceId, maxChecksHeight, maxChecksWidth, onCheckFeedback, hostId, onPrUpdated, mergeReady, onCleanup }: {
+  result?: PullRequestResult; loading: boolean; error: Error | null; colors: Colors; compact?: boolean; selectedNumber?: number; onSelect?(number: number): void; workspaceId?: string; maxChecksHeight?: number; maxChecksWidth?: number; onCheckFeedback?(check: CheckDetail): void; hostId?: string; onPrUpdated?(): void; mergeReady?: boolean; onCleanup?(): void;
 }) {
   const { t } = useMessages();
   const note = { paddingHorizontal: 12, paddingVertical: 10, gap: 8, flexDirection: "row" as const, alignItems: "center" as const, borderBottomWidth: 1, borderColor: colors.border };
@@ -32,11 +32,11 @@ export function PullRequestStatus({ result, loading, error, colors, compact = fa
         <Text style={{ fontSize: 11, color: active.number === pr.number ? colors.foreground : colors.foregroundMuted }}>#{pr.number} → {pr.baseBranch}</Text>
       </Pressable>)}
     </ScrollView> : null}
-    <PullRequestSummary key={active.number} pr={active} result={result} colors={colors} compact={compact} workspaceId={workspaceId} maxChecksHeight={maxChecksHeight} maxChecksWidth={maxChecksWidth} onCheckFeedback={onCheckFeedback} hostId={hostId} onPrUpdated={onPrUpdated} mergeReady={mergeReady} />
+    <PullRequestSummary key={active.number} pr={active} result={result} colors={colors} compact={compact} workspaceId={workspaceId} maxChecksHeight={maxChecksHeight} maxChecksWidth={maxChecksWidth} onCheckFeedback={onCheckFeedback} hostId={hostId} onPrUpdated={onPrUpdated} mergeReady={mergeReady} onCleanup={onCleanup} />
   </View>;
 }
 
-function PullRequestSummary({ pr, result, colors, compact, workspaceId, maxChecksHeight, maxChecksWidth, onCheckFeedback, hostId, onPrUpdated, mergeReady }: { pr: PullRequest; result: Available; colors: Colors; compact: boolean; workspaceId?: string; maxChecksHeight?: number; maxChecksWidth?: number; onCheckFeedback?(check: CheckDetail): void; hostId?: string; onPrUpdated?(): void; mergeReady?: boolean }) {
+function PullRequestSummary({ pr, result, colors, compact, workspaceId, maxChecksHeight, maxChecksWidth, onCheckFeedback, hostId, onPrUpdated, mergeReady, onCleanup }: { pr: PullRequest; result: Available; colors: Colors; compact: boolean; workspaceId?: string; maxChecksHeight?: number; maxChecksWidth?: number; onCheckFeedback?(check: CheckDetail): void; hostId?: string; onPrUpdated?(): void; mergeReady?: boolean; onCleanup?(): void }) {
   const { t } = useMessages();
   const stateKey = { OPEN: "prOpen", DRAFT: "prDraft", MERGED: "prMerged", CLOSED: "prClosed" } as const;
   const tone = pr.state === "OPEN" ? colors.statusSuccess : pr.state === "CLOSED" ? colors.statusDanger : pr.state === "MERGED" ? (codeReviewPalette(colors.surface0).dark ? "#8957e5" : "#8250df") : colors.foregroundMuted;
@@ -70,6 +70,7 @@ function PullRequestSummary({ pr, result, colors, compact, workspaceId, maxCheck
         tone={pr.review === "APPROVED" ? colors.statusSuccess : pr.review === "CHANGES_REQUESTED" ? colors.statusDanger : colors.statusWarning} colors={colors} /> : null}
       {pr.conflicts && pr.state === "OPEN" ? <StatusBadge label={t("prConflicts")} icon="CircleAlert" tone={colors.statusDanger} colors={colors} /> : null}
       </View>
+      {pr.state === "MERGED" && onCleanup ? <Pressable accessibilityRole="button" accessibilityLabel={t("cleanupMergedHint")} onPress={onCleanup} style={{ minHeight: compact ? 44 : 32, justifyContent: "center" }}><View style={{ minHeight: 28, paddingHorizontal: 8, borderRadius: 4, backgroundColor: colors.surface1, flexDirection: "row", alignItems: "center", gap: 6 }}><Icon name="FolderMinus" size={14} color={colors.foregroundMuted} /><Text style={{ color: colors.foreground, fontSize: 12, lineHeight: 18 }}>{t("cleanupTitle")}</Text></View></Pressable> : null}
       {pr.state === "OPEN" && workspaceId && hostId ? <MergePrAction key={`${pr.number}:${pr.headSha}:${pr.baseBranch}`} workspaceId={workspaceId} repository={result.repository} number={pr.number} headSha={pr.headSha} baseBranch={pr.baseBranch} colors={colors} compact={compact} hostId={hostId} ready={mergeReady ?? true} onUpdated={onPrUpdated} /> : null}
     </View>
 

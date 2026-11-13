@@ -1,3 +1,4 @@
+import { cleanupResultSchema, sourcePreviewRequest, sourceExecuteRequest, sourceStatusRequest } from "./cleanup";
 import { defineRpc } from "@getpaseo/plugin";
 import { z } from "zod";
 import { mergeOptionsSchema, mergeOutcomeSchema, mergeRequestFields } from "./pr-merge";
@@ -46,7 +47,7 @@ export const reviewSchema = z.object({ snapshot: snapshotSchema, files: z.array(
 export type Review = z.infer<typeof reviewSchema>;
 export const catalogRpc = defineRpc({
   name: "diff.catalog", input: z.object({ agentId: z.string().min(1) }),
-  output: z.object({ workspace: workspaceSchema.nullable(), emptyReason: workspaceEmptyReason.optional(), inferenceError: z.string().optional() }),
+  output: z.object({ workspace: workspaceSchema.nullable(), emptyReason: workspaceEmptyReason.optional(), inferenceError: z.string().optional(), cleanup: cleanupResultSchema.optional() }),
 });
 export const snapshotRpc = defineRpc({
   name: "diff.snapshot", input: z.object({ workspaceId, comparison, ...reviewOptions }), output: snapshotSchema,
@@ -63,8 +64,9 @@ export const threadsRpc = defineRpc({ name: "github.discussions", input: z.objec
 export const checkDetailRpc = defineRpc({ name: "github.check-detail", input: z.object({ workspaceId, prNumber: z.number().int().positive(), name: z.string().max(500), url: z.string().url().nullable() }), output: checkDetailSchema });
 export const contextRpc = defineRpc({ name: "diff.context", input: z.object({ workspaceId, comparison, ...reviewOptions, path: z.string().min(1), side: z.enum(["old", "new"]), start: z.number().int().min(1), count: z.number().int().min(1).max(200), revision: z.string() }), output: contextSchema });
 export const checkpointRpc = defineRpc({ name: "diff.checkpoint", input: z.object({ workspaceId, comparison, prNumber: z.number().int().positive().optional(), agentId: z.string().min(1).max(200) }), output: checkpointSchema });
-// Git reads stay local and read-only; GitHub merge writes require an explicit merge-pr request.
+// Review reads stay local. Merge and worktree removal each require their explicit write operation.
 export const bridgeRequest = z.discriminatedUnion("op", [
+  sourcePreviewRequest, sourceExecuteRequest, sourceStatusRequest,
   z.object({ op: z.literal("catalog") }),
   z.object({ op: z.literal("inspect"), workspaceId }),
   z.object({ op: z.literal("snapshot"), workspaceId, comparison, ...reviewOptions }),

@@ -1,3 +1,4 @@
+import { readPrivate, writePrivate } from "./cleanup-store";
 import { z } from "zod";
 import { workspaceSchema, type BridgeRequest, type Workspace } from "../shared/diff";
 import type { RemoteSource } from "./config";
@@ -8,7 +9,8 @@ export class RemoteSources {
   private routes = new Map<string, RemoteSource>();
   private conflicts = new Set<string>();
   private listing: Promise<Workspace[]> | null = null;
-  constructor(private sources: RemoteSource[]) {}
+  private cleanupRoutes: Record<string, string>;
+  constructor(private sources: RemoteSource[], private cleanupFile?: string) { this.cleanupRoutes = cleanupFile ? readPrivate(cleanupFile, {}) : {}; }
   private catalog() {
     if (this.listing) return this.listing;
     const load = async () => {
@@ -31,10 +33,14 @@ export class RemoteSources {
   }
   async request(input: BridgeRequest): Promise<unknown> {
     if (input.op === "catalog") return this.catalog();
+    const pinned = input.op.startsWith("cleanup-") ? this.cleanupRoutes[input.workspaceId] : undefined;
+    if (pinned) { const source = this.sources.find(s => s.endpoint === pinned); if (!source) throw new Error("The original cleanup source is no longer configured."); return remoteRequest(source, input); }
     if (!this.routes.has(input.workspaceId)) await this.catalog();
     if (this.conflicts.has(input.workspaceId)) throw new Error("The workspace ID exists on multiple project hosts. Resolve the duplicate before reviewing changes.");
     const source = this.routes.get(input.workspaceId);
     if (!source) throw new Error("This session's DevSpace workspace is no longer available.");
-    return remoteRequest(source, input);
+    const value = await remoteRequest(source, input);
+    if (input.op === "cleanup-preview") { this.cleanupRoutes[input.workspaceId] = source.endpoint; if (this.cleanupFile) writePrivate(this.cleanupFile, this.cleanupRoutes); }
+    return value;
   }
 }

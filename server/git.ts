@@ -32,8 +32,10 @@ export class LocalDiff {
   private githubReview: GitHubReview;
   private checkpoints: Checkpoints;
   private merger: GitHubMerge;
+  private cleanup?: (input: BridgeRequest) => Promise<unknown>;
   private pullCache = new Map<string, { expires: number; value: ReturnType<LocalDiff["readPullRequests"]> }>();
-  constructor(private databasePath: string, stateDirectory = join(homedir(), ".config/paseo-devspace-sidecar/reviews"), dependencies?: { github?: PullRequests; review?: GitHubReview; merger?: GitHubMerge }) {
+  constructor(private databasePath: string, stateDirectory = join(homedir(), ".config/paseo-devspace-sidecar/reviews"), dependencies?: { github?: PullRequests; review?: GitHubReview; merger?: GitHubMerge; cleanup?: (input: BridgeRequest) => Promise<unknown> }) {
+    this.cleanup = dependencies?.cleanup;
     this.merger = dependencies?.merger ?? new GitHubMerge();
     this.github = dependencies?.github ?? new PullRequests(); this.githubReview = dependencies?.review ?? new GitHubReview(); this.checkpoints = new Checkpoints(stateDirectory);
   }
@@ -344,6 +346,7 @@ export class LocalDiff {
     return value;
   }
   dispatch(input: BridgeRequest): Promise<unknown> {
+    if (input.op === "cleanup-preview" || input.op === "cleanup-execute" || input.op === "cleanup-status") { if (!this.cleanup) throw new Error("DevSpace lifecycle adapter is unavailable."); return this.cleanup(input); }
     if (input.op === "catalog") return this.catalog();
     if (input.op === "inspect") return this.inspect(input.workspaceId);
     if (input.op === "snapshot") return this.snapshot(input.workspaceId, input.comparison, input);

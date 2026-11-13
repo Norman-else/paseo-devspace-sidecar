@@ -1,3 +1,6 @@
+import { CleanupCoordinator } from "./server/cleanup-coordinator";
+import { cleanupRequest } from "./server/cleanup-client";
+import { cleanupPreviewRpc, cleanupExecuteRpc, cleanupStatusRpc } from "./shared/cleanup";
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { z } from "zod";
 import { catalogRpc, devspaceWorkspaceIds, fileRpc, fileResultSchema, pullRequestRpc, reviewRpc, reviewSchema, snapshotRpc, snapshotSchema, suggestedWorkspace, workspaceSchema, workspaceInspectionSchema, type BridgeRequest } from "./shared/diff";
@@ -12,10 +15,10 @@ import { mergeOptionsRpc, mergePrRpc, mergeStatusRpc, threadsRpc, checkDetailRpc
 export default function contribute(server: PluginServerContext) {
   const ready = loadConfig().then(async (config) => {
     if (config.mode === "remote") {
-      const sources = new RemoteSources([config, ...config.additionalSources]);
+      const sources = new RemoteSources([config, ...config.additionalSources], join(configDirectory, "cleanup-routes.json"));
       return { request: (input: BridgeRequest) => sources.request(input), close: () => {} };
     }
-    const local = new LocalDiff(config.databasePath, join(configDirectory, "reviews"));
+    const local = new LocalDiff(config.databasePath, join(configDirectory, "reviews"), { cleanup: input => cleanupRequest(config, input) });
     const bridge = await startBridge(config, local);
     return {
       request: (input: BridgeRequest) => local.dispatch(input),
@@ -23,7 +26,15 @@ export default function contribute(server: PluginServerContext) {
     };
   });
   void ready.catch((error) => console.error("DevSpace Diff startup failed:", error instanceof Error ? error.message : "Unknown error"));
+  const cleanup = new CleanupCoordinator(join(configDirectory, "cleanup-jobs.json"), async input => (await ready).request(input));
+  server.handle(cleanupPreviewRpc, (input, { paseo }) => cleanup.preview(input, paseo));
+  server.handle(cleanupExecuteRpc, (input, { paseo }) => cleanup.execute(input, paseo));
+  server.handle(cleanupStatusRpc, (input, { paseo }) => cleanup.status(input.requestId, paseo, input.retryArchive));
+  server.addHook("agent.open.before", async ({ request }) => { cleanup.assertCanOpen(request.agentId, request.purpose); return request; });
+  server.addHook("agent.turn.after", async ({ agent }, { paseo }) => { try { await cleanup.observe(paseo, agent.id, agent.parentAgentId); } catch (error) { console.error("Cleanup association could not be updated:", error instanceof Error ? error.message : "unknown"); } });
   server.handle(catalogRpc, async ({ agentId }, { paseo }) => {
+    const receipt = cleanup.receipt(agentId);
+    if (receipt && ["cleaning", "archive_pending", "done", "unknown"].includes(receipt.phase)) return { workspace: null, cleanup: receipt };
     let timeline;
     try { timeline = await paseo.agents.ref(agentId).timeline.refetch({ limit: 200 }); }
     catch { return { workspace: null, inferenceError: "Unable to read this session. Refresh and try again." }; }
@@ -46,5 +57,5 @@ export default function contribute(server: PluginServerContext) {
   server.handle(checkDetailRpc, async (input) => checkDetailRpc.output.parse(await (await ready).request({ op: "check-detail", ...input })));
   server.handle(contextRpc, async (input) => contextRpc.output.parse(await (await ready).request({ op: "context", ...input })));
   server.handle(checkpointRpc, async (input) => checkpointRpc.output.parse(await (await ready).request({ op: "checkpoint", ...input })));
-  return async () => { try { await (await ready).close(); } catch { /* startup failure already reported */ } };
+  return async () => { cleanup.close(); try { await (await ready).close(); } catch { /* startup failure already reported */ } };
 }

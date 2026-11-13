@@ -1,3 +1,4 @@
+import { CleanupDialog } from "./cleanup-dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Pressable, Text, View, type FlatList as NativeFlatList } from "react-native";
 import { useQuery } from "@tanstack/react-query";
@@ -34,7 +35,7 @@ import { fileDiscussions, nextDiscussion } from "../shared/comment-navigation";
 
 const stateSchema = z.object({ comparison: comparisonSchema, scope: z.string().default(""), collapsed: z.array(z.string()).default([]), reviewed: z.record(z.string(), z.string()).default({}), indexVisible: z.boolean().default(true), indexWidth: z.number().min(140).max(520).nullable().default(null), prNumber: z.number().int().optional(), filter: z.enum(["all", "unreviewed", "since"]).default("all"), points: z.record(z.string(), checkpointSchema).default({}), view: z.enum(["changes", "comments"]).default("changes") });
 type Jump = { path: string; key?: string };
-export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
+export function DiffPanel({ theme, host, params, tab, cleanupInitiallyOpen = false }: PluginAgentPanelProps & { cleanupInitiallyOpen?: boolean }) {
   const { t, translateBackend, locale } = useMessages(), toast = useToast();
   const typography = useCodeAppearance();
   const [state, save] = useTabState(tab, stateSchema, { comparison: "task" as const, scope: "", collapsed: [] as string[], reviewed: {} as Record<string, string>, indexVisible: true, indexWidth: null as number | null, filter: "all" as const, points: {}, view: "changes" as const });
@@ -43,6 +44,7 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
   const [search, setSearch] = useState(""), [searchOpen, setSearchOpen] = useState(false), [searchType, setSearchType] = useState<"files" | "code">("files");
   const [indexOpen, setIndexOpen] = useState(false), [optionsOpen, setOptionsOpen] = useState(false), [activePath, setActivePath] = useState("");
   const [jump, setJump] = useState<Jump | null>(null), [draft, setDraft] = useState<FeedbackDraft | null>(null);
+  const [cleanupOpen, setCleanupOpen] = useState(cleanupInitiallyOpen);
   const [showResolved, setShowResolved] = useState(false);
   const [saving, setSaving] = useState(false), [loadingContext, setLoadingContext] = useState("");
   const [overrides, setOverrides] = useState<Record<string, ReviewFile>>({});
@@ -222,7 +224,6 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
     }
     else { clearNativeCodeSelection(); setSelection(null); setIndexOpen(!indexOpen); }
   }} />;
-  const optionAction = <ToolButton touch={!wide} icon="SlidersHorizontal" label={t("reviewOptions")} active={effectiveFilter !== "all"} colors={colors} onPress={() => setOptionsOpen(true)} />;
   const toggleSearch = () => { setSearchOpen(!searchOpen); if (searchOpen) setSearch(""); };
   const searchAction = <ToolButton icon="Search" label={t("filterFiles")} colors={colors} touch={!wide} onPress={toggleSearch} active={searchOpen} />;
   const canSearch = allFiles.length > 0 || searchOpen, canFilter = allFiles.length > 0 || effectiveFilter !== "all";
@@ -230,12 +231,13 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
     ...(size.width < 380 && canSearch ? [{ id: "search", label: t("filterFiles"), icon: "Search", onSelect: toggleSearch }] : []),
     ...(files.length ? [{ id: "collapse", label: t(collapsed.size ? "expandAll" : "collapseAll"), icon: "ListCollapse", onSelect: () => mutate({ collapsed: collapsed.size ? [] : files.map((file) => file.path) }) }] : []),
     ...(canFilter ? [{ id: "filters", label: t("reviewOptions"), icon: "SlidersHorizontal", onSelect: () => setOptionsOpen(true) }] : []),
+    ...(bound?.mode === "worktree" ? [{ id: "cleanup", label: t("cleanupTitle"), icon: "FolderMinus", separatorBefore: true, onSelect: () => setCleanupOpen(true) }] : []),
     { id: "refresh", label: t("refresh"), icon: "RefreshCw", onSelect: refresh },
   ]} />;
-  const actions = <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>{bound ? wide ? <>{canSearch ? searchAction : null}{files.length ? collapseAction : null}{refreshAction}{canFilter ? optionAction : null}{files.length ? indexAction : null}</>
-    : !canSearch && !canFilter && !files.length ? refreshAction : <>{canSearch && size.width >= 380 ? searchAction : null}{moreAction}{files.length ? indexAction : null}</> : refreshAction}</View>;
+  const actions = <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>{bound ? wide ? <>{canSearch ? searchAction : null}{files.length ? collapseAction : null}{refreshAction}{moreAction}{files.length ? indexAction : null}</>
+    : !canSearch && !canFilter && !files.length ? moreAction : <>{canSearch && size.width >= 380 ? searchAction : null}{moreAction}{files.length ? indexAction : null}</> : refreshAction}</View>;
   return <View style={{ flex: 1, minHeight: 0, backgroundColor: colors.surface0 }} testID="devspace-diff-panel" onLayout={(event) => { const width = event.nativeEvent.layout.width; if (width > 0) setSize((previous) => previous.width === width ? previous : { ...previous, width }); }}>
-    {pr && header.mode === "pull-request" ? <PullRequestStatus result={pullRequests.data} loading={false} error={null} colors={colors} compact={!wide} selectedNumber={pr.number} onSelect={(prNumber) => save({ ...state, prNumber, filter: "all", scope: "", reviewed: {}, collapsed: [] })} workspaceId={bound?.id} maxChecksHeight={size.height} maxChecksWidth={size.width - 24} onCheckFeedback={checkFeedback} hostId={host.id} onPrUpdated={refresh} mergeReady={comparison !== "pr" || document.data?.snapshot.headSha === pr.headSha} />
+    {pr && header.mode === "pull-request" ? <PullRequestStatus result={pullRequests.data} loading={false} error={null} colors={colors} compact={!wide} selectedNumber={pr.number} onSelect={(prNumber) => save({ ...state, prNumber, filter: "all", scope: "", reviewed: {}, collapsed: [] })} workspaceId={bound?.id} maxChecksHeight={size.height} maxChecksWidth={size.width - 24} onCheckFeedback={checkFeedback} hostId={host.id} onPrUpdated={refresh} onCleanup={bound?.mode === "worktree" ? () => setCleanupOpen(true) : undefined} mergeReady={comparison !== "pr" || document.data?.snapshot.headSha === pr.headSha} />
       : <View style={{ paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 8 }}><Icon name={bound ? "GitBranch" : "FileDiff"} size={14} color={colors.foregroundMuted} /><Text style={{ color: colors.foreground, fontSize: 12, fontWeight: "600", flex: 1 }} numberOfLines={1}>{bound?.branch ?? t("codeReview")}</Text>{!bound ? actions : null}</View>}
     {header.showPrNotice ? <PullRequestStatus result={pullRequests.data} loading={pullRequests.isPending} error={pullRequests.error} colors={colors} compact={!wide} /> : null}
     {pr ? <ReviewTabs view={view} count={discussions.data?.threads.length} compact={!wide} colors={colors} onChange={changeView} canNavigate={currentThreads.length > 0} onNavigate={(direction) => { const thread = nextDiscussion(currentThreads, currentThreadId, direction); if (thread) jumpThread(thread); }} /> : null}
@@ -250,7 +252,8 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
     {view === "changes" && effectiveFilter !== "all" && bound ? <Pressable accessibilityRole="button" onPress={() => setOptionsOpen(true)} style={{ paddingHorizontal: 12, paddingVertical: 6 }}><Text style={{ color: colors.foregroundMuted, fontSize: 11 }}>{since && point ? t("reviewPointAt", { time: new Date(point.createdAt).toLocaleString(locale) }) : t("unreviewedFiles")}</Text></Pressable> : null}
     {view === "changes" && visibleError ? <View style={{ padding: 16, gap: 12 }}><Text selectable style={{ color: colors.statusDanger, fontSize: 13 }}>{translateBackend(visibleError.message)}</Text><Pressable accessibilityRole="button" onPress={refresh} style={{ alignSelf: "flex-start", paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 6 }}><Text style={{ color: colors.foreground, fontSize: 13 }}>{t("retry")}</Text></Pressable></View> : null}
     {view === "changes" && !visibleError && (catalog.isLoading || (bound && !document.data && (snapshot.isFetching || document.isFetching))) ? <ActivityIndicator color={colors.foregroundMuted} style={{ margin: 20 }} /> : null}
-    {!catalog.isPending && !bound && !visibleError ? <View style={{ padding: 20, gap: 8 }}><Text style={{ color: colors.foreground, fontSize: 13 }}>{t(emptyReason ? "noReviewableWorkspace" : "noAssociation")}</Text><Text style={{ color: colors.foregroundMuted, fontSize: 13, lineHeight: 20 }}>{emptyReason ? translateBackend(workspaceEmptyMessages[emptyReason]) : catalog.data?.inferenceError ? translateBackend(catalog.data.inferenceError) : t("noAssociationHelp")}</Text></View> : null}
+    {catalog.data?.cleanup ? <Pressable accessibilityRole="button" onPress={() => setCleanupOpen(true)} style={{ margin: 20, padding: 16, gap: 8, backgroundColor: colors.surface1, borderRadius: 6 }}><Text style={{ color: colors.foreground, fontSize: 15, fontWeight: "600" }}>{t(catalog.data.cleanup.phase === "done" ? "cleanupDone" : catalog.data.cleanup.phase === "archive_pending" ? "cleanupArchivePending" : "cleanupUnknown")}</Text><Text style={{ color: colors.foregroundMuted, fontSize: 13, lineHeight: 20 }}>{catalog.data.cleanup.root}</Text><Text style={{ color: colors.accent, fontSize: 13 }}>{t("cleanupCheckResult")} →</Text></Pressable> : null}
+    {!catalog.isPending && !bound && !catalog.data?.cleanup && !visibleError ? <View style={{ padding: 20, gap: 8 }}><Text style={{ color: colors.foreground, fontSize: 13 }}>{t(emptyReason ? "noReviewableWorkspace" : "noAssociation")}</Text><Text style={{ color: colors.foregroundMuted, fontSize: 13, lineHeight: 20 }}>{emptyReason ? translateBackend(workspaceEmptyMessages[emptyReason]) : catalog.data?.inferenceError ? translateBackend(catalog.data.inferenceError) : t("noAssociationHelp")}</Text></View> : null}
     <View style={{ flex: 1, minHeight: 0, flexDirection: "row", display: view === "changes" ? "flex" : "none" }} onLayout={(event) => {
       // Native synthetic events can be recycled before React runs this updater.
       const height = event.nativeEvent.layout.height;
@@ -274,7 +277,10 @@ export function DiffPanel({ theme, host, params, tab }: PluginAgentPanelProps) {
       </> : null}
     </View>
 
+    <CleanupDialog open={cleanupOpen} onClose={() => setCleanupOpen(false)} agentId={params.agentId} workspaceId={bound?.id} prNumber={pr?.number} receipt={catalog.data?.cleanup} colors={colors} onUpdated={refresh} />
     <ReviewOptions open={optionsOpen} onClose={() => setOptionsOpen(false)} filter={effectiveFilter} scopeLabel={`${pr ? `PR #${pr.number}` : bound?.branch ?? t("codeReview")} · ${t(({ task: "taskChanges", uncommitted: "uncommitted", pr: "prChanges", local: "localChanges" } as const)[comparison])}`} prComparison={comparison === "pr"} point={point} busy={saving} onSave={() => void savePoint()} onFilter={(filter) => save({ ...state, filter })} colors={colors} />
     <FeedbackComposer draft={draft} agentId={params.agentId} colors={colors} onClose={() => setDraft(null)} />
   </View>;
 }
+
+export function CleanupPanel(props: PluginAgentPanelProps) { return <DiffPanel {...props} cleanupInitiallyOpen />; }

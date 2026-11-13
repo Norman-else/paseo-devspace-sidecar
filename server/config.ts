@@ -8,7 +8,7 @@ export const configDirectory = process.env.PASEO_DEVSPACE_SIDECAR_HOME ?? join(h
 export const remoteSourceSchema = z.object({ name: z.string().min(1).max(120).optional(), endpoint: z.string().url(), token: z.string().min(32) });
 export type RemoteSource = z.infer<typeof remoteSourceSchema>;
 export const configSchema = z.discriminatedUnion("mode", [
-  z.object({ mode: z.literal("local"), databasePath: z.string(), port: z.number().int().min(1024).max(65535), token: z.string().min(32), sourceName: z.string().optional() }),
+  z.object({ mode: z.literal("local"), databasePath: z.string(), port: z.number().int().min(1024).max(65535), token: z.string().min(32), devspaceEndpoint: z.string().url().optional(), sourceName: z.string().optional() }),
   remoteSourceSchema.extend({ mode: z.literal("remote"), additionalSources: z.array(remoteSourceSchema).max(8).default([]) }),
 ]);
 export type Config = z.infer<typeof configSchema>;

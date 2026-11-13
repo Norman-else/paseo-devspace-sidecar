@@ -1,7 +1,7 @@
 {
   "name": "paseo-devspace-sidecar",
   "private": true,
-  "version": "0.7.3",
+  "version": "0.8.0",
   "files": [
     "paseo-plugin.json",
     "OVERVIEW.md",
@@ -12,7 +12,8 @@
     "index.server.tsx",
     "client/",
     "server/",
-    "shared/"
+    "shared/",
+    "scripts/install-devspace-lifecycle.mjs"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
