@@ -35,8 +35,8 @@ export function MergePrAction({ workspaceId, repository, number, headSha, baseBr
   }, [outcome, options.refetch, t, toast]);
   const label = busy || pending ? t("mergeInProgress") : uncertain ? t("mergeCheckStatus") : done ? t("mergeSucceeded") : bypass ? t(compact ? "mergeBypassCompact" : "mergeBypassAction", { method: t(shortLabel[method]) }) : t(method === "merge" ? "mergeMergeAction" : methodLabel[method]);
   const disabled = busy || pending || done || !uncertain && (reason !== "none" || !data?.methods.includes(method));
-  const tone = bypass ? colors.statusDanger : colors.statusSuccess;
-  const foreground = disabled || busy || pending || uncertain ? colors.foregroundMuted : colors.surface0;
+  const tone = colors.accent;
+  const foreground = disabled || busy || pending || uncertain ? colors.foregroundMuted : colors.accentForeground;
   const background = disabled || uncertain ? colors.surface2 : tone;
   const submit = async () => {
     if (uncertain) { void status.refetch(); return; }
@@ -56,7 +56,7 @@ export function MergePrAction({ workspaceId, repository, number, headSha, baseBr
       </View>}
     </Pressable>
     <ReviewMenu title={t("mergeOptions")} colors={colors} touch={compact} align="right" width={340} trigger={({ open, toggle }) => <Pressable accessibilityRole="button" accessibilityLabel={t("mergeOptions")} accessibilityState={{ expanded: open, disabled: locked }} aria-expanded={open} disabled={locked} onPress={toggle} style={{ minHeight: compact ? 44 : 28, justifyContent: "center" }}>
-      <View style={{ width: compact ? 44 : 28, height: compact ? 32 : 28, alignItems: "center", justifyContent: "center", backgroundColor: background, borderWidth: 1, borderColor: disabled || uncertain ? colors.border : tone, borderTopRightRadius: 4, borderBottomRightRadius: 4, opacity: locked ? 0.6 : 1 }}><Icon name="ChevronDown" size={13} color={foreground} /></View>
+      <View style={{ width: compact ? 44 : 28, height: compact ? 32 : 28, alignItems: "center", justifyContent: "center", backgroundColor: background, borderWidth: 1, borderColor: disabled || uncertain ? colors.border : tone, borderTopRightRadius: 4, borderBottomRightRadius: 4, opacity: locked ? 0.6 : 1 }}><View pointerEvents="none" testID="devspace-merge-divider" style={{ position: "absolute", left: -1, top: 0, bottom: 0, width: 1, backgroundColor: foreground, opacity: disabled || uncertain ? 0.55 : 0.4 }} /><Icon name="ChevronDown" size={13} color={foreground} /></View>
     </Pressable>} options={[
       ...(["merge", "squash", "rebase"] as const).map((value) => ({ id: value, label: t(methodLabel[value]), description: !data?.methods.includes(value) ? t("mergeMethodUnavailable") : value === "merge" ? t("mergeCommitHelp") : value === "squash" ? t("mergeSquashHelp", { count: data.commits }) : t("mergeRebaseHelp", { count: data.commits }), selected: value === method, disabled: locked || !data?.methods.includes(value), onSelect: () => setSelected(value) })),
       { id: "bypass", label: t("mergeBypass"), description: data?.canBypass ? t("mergeBypassHelp") : t("mergeBypassDenied"), selected: bypass, checkbox: true, danger: true, separatorBefore: true, disabled: locked || !data?.canBypass, onSelect: () => setBypass(!bypass) },
