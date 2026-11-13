@@ -1,7 +1,7 @@
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { ExternalLink, Icon, ScrollView } from "@getpaseo/plugin/client/ui";
 import type { PullRequest, PullRequestResult } from "../shared/pull-request";
-import { diffBackground } from "../shared/appearance";
+import { codeReviewPalette, diffBackground } from "../shared/appearance";
 import { MergePrAction } from "./merge-pr-action";
 import { ChecksPopover } from "./checks-popover";
 import type { CheckDetail } from "../shared/review-details";
@@ -39,7 +39,7 @@ export function PullRequestStatus({ result, loading, error, colors, compact = fa
 function PullRequestSummary({ pr, result, colors, compact, workspaceId, maxChecksHeight, maxChecksWidth, onCheckFeedback, hostId, onPrUpdated, mergeReady }: { pr: PullRequest; result: Available; colors: Colors; compact: boolean; workspaceId?: string; maxChecksHeight?: number; maxChecksWidth?: number; onCheckFeedback?(check: CheckDetail): void; hostId?: string; onPrUpdated?(): void; mergeReady?: boolean }) {
   const { t } = useMessages();
   const stateKey = { OPEN: "prOpen", DRAFT: "prDraft", MERGED: "prMerged", CLOSED: "prClosed" } as const;
-  const tone = pr.state === "OPEN" ? colors.statusSuccess : pr.state === "CLOSED" ? colors.statusDanger : pr.state === "MERGED" ? colors.accent : colors.foregroundMuted;
+  const tone = pr.state === "OPEN" ? colors.statusSuccess : pr.state === "CLOSED" ? colors.statusDanger : pr.state === "MERGED" ? (codeReviewPalette(colors.surface0).dark ? "#8957e5" : "#8250df") : colors.foregroundMuted;
   const checks = pr.checks;
   const checkTone = checks.status === "failed" ? colors.statusDanger : checks.status === "passed" ? colors.statusSuccess : checks.status === "pending" ? colors.statusWarning : colors.foregroundMuted;
   const checksLabel = checks.status === "passed" ? t("prChecksPassed", { count: checks.passed }) : checks.status === "failed" ? t("prChecksFailed", { count: checks.failed }) : checks.status === "pending" ? t("prChecksPending", { count: checks.pending }) : t(checks.status === "none" ? "prNoChecks" : checks.status === "skipped" ? "prChecksSkipped" : "prChecksUnknown");
@@ -55,7 +55,7 @@ function PullRequestSummary({ pr, result, colors, compact, workspaceId, maxCheck
         </View>
         {!compact ? <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 170, minWidth: 0, alignItems: "flex-end" }}><BranchComparison source={result.branch} target={pr.baseBranch} colors={colors} /></View> : null}
       </View>
-      <StatusBadge label={t(stateKey[pr.state])} tone={tone} colors={colors} filled />
+      <StatusBadge label={t(stateKey[pr.state])} tone={tone} colors={colors} filled solid={pr.state === "MERGED"} />
     </View>
     {compact ? <View style={{ alignItems: "flex-start" }}><BranchComparison source={result.branch} target={pr.baseBranch} colors={colors} /></View> : null}
     <Text numberOfLines={2} style={{ color: colors.foreground, fontSize: 13, fontWeight: "500", lineHeight: 19 }}>{pr.title}</Text>
@@ -85,11 +85,11 @@ function BranchComparison({ source, target, colors }: { source: string; target: 
   </View>;
 }
 
-function StatusBadge({ label, icon, tone, colors, filled = false }: { label: string; icon?: string; tone: string; colors: Colors; filled?: boolean }) {
+function StatusBadge({ label, icon, tone, colors, filled = false, solid = false }: { label: string; icon?: string; tone: string; colors: Colors; filled?: boolean; solid?: boolean }) {
   return <View style={{ minHeight: filled ? 24 : 20, flexDirection: "row", alignItems: "center", gap: 4,
     paddingHorizontal: filled ? 8 : 0, paddingVertical: filled ? 4 : 2, borderRadius: filled ? 4 : 0,
-    backgroundColor: filled ? diffBackground(tone, colors.surface0) : "transparent" }}>
-    {icon ? <Icon name={icon} size={12} color={tone} /> : null}
-    <Text style={{ fontSize: 11, lineHeight: 16, fontWeight: "500", color: tone }}>{label}</Text>
+    backgroundColor: solid ? tone : filled ? diffBackground(tone, colors.surface0) : "transparent" }}>
+    {icon ? <Icon name={icon} size={12} color={solid ? "#ffffff" : tone} /> : null}
+    <Text style={{ fontSize: 11, lineHeight: 16, fontWeight: "500", color: solid ? "#ffffff" : tone }}>{label}</Text>
   </View>;
 }
