@@ -26,7 +26,7 @@ async function fixture() {
   const calls: string[][] = [];
   const gh = async (_: string, args: string[]) => {
     calls.push(args);
-    if (args[0] === "repo") return JSON.stringify({ nameWithOwner: "Example/repo", parent: null });
+    if (args[0] === "repo") return JSON.stringify({ nameWithOwner: "Example/repo", defaultBranchRef: { name: "main" }, parent: null });
     if (args[0] === "pr") return JSON.stringify([rawPr]);
     if (args[0] === "run") return "\u001b[31mERROR: test failed\u001b[0m\nexpected 2, got 3\n";
     const endpoint = args[1];

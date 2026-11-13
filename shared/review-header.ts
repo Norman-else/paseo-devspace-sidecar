@@ -6,3 +6,9 @@ export function reviewHeader(input: { hasWorkspace: boolean; result?: PullReques
   if (!input.error && input.result?.status === "available" && input.result.pullRequests.length > 0) return { mode: "pull-request" as const, showPrNotice: false };
   return { mode: "workspace" as const, showPrNotice: input.pending || input.error || input.result?.status === "unavailable" };
 }
+
+/** A response for a previous checkout branch cannot label the current review. */
+export function branchPullRequests(result: PullRequestResult | undefined, branch: string | null | undefined) {
+  if (!result || result.status === "unavailable") return result;
+  return result.branch === branch ? result : undefined;
+}

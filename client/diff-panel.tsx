@@ -16,7 +16,7 @@ import { useRowMeasurements } from "./use-row-measurements";
 import { useMessages } from "./messages";
 import { useCodeAppearance } from "./use-code-appearance";
 import { PullRequestStatus } from "./pull-request-status";
-import { reviewHeader } from "../shared/review-header";
+import { branchPullRequests, reviewHeader } from "../shared/review-header";
 import { ReviewMenu } from "./review-menu";
 import { ReviewEmptyState } from "./review-empty-state";
 import { reviewEmptyKind } from "../shared/review-empty";
@@ -64,20 +64,27 @@ export function DiffPanel({ theme, host, params, tab, cleanupInitiallyOpen = fal
   const rejectedReason = rejected?.id === catalog.data?.workspace?.id && rejected && catalog.dataUpdatedAt <= rejected.at ? rejected.reason : undefined;
   const bound = rejectedReason ? null : catalog.data?.workspace;
   const emptyReason = rejectedReason ?? catalog.data?.emptyReason;
-  const pullRequests = useQuery({ queryKey: ["devspace-pull-requests", host.id, bound?.id, bound?.branch], queryFn: () => prCall({ workspaceId: bound!.id }), enabled: !!bound, refetchInterval: 30000, staleTime: 10000, retry: false });
-  const result = pullRequests.data?.status === "available" ? pullRequests.data : null;
+  const pullRequests = useQuery({ queryKey: ["devspace-pull-requests-v2", host.id, bound?.id, bound?.branch], queryFn: () => prCall({ workspaceId: bound!.id }), enabled: !!bound, refetchInterval: 30000, staleTime: 10000, retry: false });
+  const currentPrResult = branchPullRequests(pullRequests.data, bound?.branch);
+  const result = currentPrResult?.status === "available" ? currentPrResult : null;
   const pr = result?.pullRequests.find((pr) => pr.number === state.prNumber) ?? result?.pullRequests[0];
   const view = pr ? state.view : "changes";
   const comparison: Snapshot["comparison"] = pr ? state.comparison === "local" ? "local" : "pr" : state.comparison === "uncommitted" || !bound?.baseSha ? "uncommitted" : "task";
-  const scope = `${params.agentId}:${bound?.id}:${comparison}:${pr?.number ?? ""}`;
+  const scope = `${params.agentId}:${bound?.id}:${bound?.branch ?? ""}:${comparison}:${pr?.number ?? ""}`;
   const point = state.points[scope];
   const effectiveFilter = state.filter === "since" && !point ? "all" : state.filter;
   const since = effectiveFilter === "since" ? point?.id : undefined;
   const request = { comparison, prNumber: pr?.number, since };
-  const snapshot = useQuery({ queryKey: ["devspace-snapshot-v3", host.id, bound?.id, comparison, pr?.number, since], queryFn: () => snapshotCall({ workspaceId: bound!.id, ...request }), enabled: !!bound, refetchInterval: 3000, retry: false });
-  const document = useQuery({ queryKey: ["devspace-review-v3", host.id, bound?.id, comparison, pr?.number, since, snapshot.data?.revision], queryFn: () => reviewCall({ workspaceId: bound!.id, ...request }), enabled: !!bound && !!snapshot.data, placeholderData: (previous) => previous && previous.snapshot.workspace.id === bound?.id && previous.snapshot.comparison === comparison && previous.snapshot.checkpoint?.id === since && previous.snapshot.prNumber === pr?.number ? previous : undefined, retry: 1, gcTime: 60000 });
-  const local = useQuery({ queryKey: ["devspace-local-v3", host.id, bound?.id, pr?.number, pr?.headSha], queryFn: () => snapshotCall({ workspaceId: bound!.id, comparison: "local", prNumber: pr!.number }), enabled: !!bound && !!pr, refetchInterval: 10000, retry: false });
-  const discussions = useQuery({ queryKey: ["devspace-discussions", host.id, bound?.id, pr?.number, pr?.headSha], queryFn: () => threadsCall({ workspaceId: bound!.id, prNumber: pr!.number }), enabled: !!bound && !!pr, refetchInterval: 30000, retry: false });
+  const snapshot = useQuery({ queryKey: ["devspace-snapshot-v4", host.id, bound?.id, bound?.branch, comparison, pr?.number, since], queryFn: () => snapshotCall({ workspaceId: bound!.id, ...request }), enabled: !!bound, refetchInterval: 3000, retry: false });
+  const document = useQuery({ queryKey: ["devspace-review-v4", host.id, bound?.id, bound?.branch, comparison, pr?.number, since, snapshot.data?.revision], queryFn: () => reviewCall({ workspaceId: bound!.id, ...request }), enabled: !!bound && !!snapshot.data, placeholderData: (previous) => previous && previous.snapshot.workspace.id === bound?.id && previous.snapshot.workspace.branch === bound?.branch && previous.snapshot.comparison === comparison && previous.snapshot.checkpoint?.id === since && previous.snapshot.prNumber === pr?.number ? previous : undefined, retry: 1, gcTime: 60000 });
+  const local = useQuery({ queryKey: ["devspace-local-v4", host.id, bound?.id, bound?.branch, pr?.number, pr?.headSha], queryFn: () => snapshotCall({ workspaceId: bound!.id, comparison: "local", prNumber: pr!.number }), enabled: !!bound && !!pr, refetchInterval: 10000, retry: false });
+  const discussions = useQuery({ queryKey: ["devspace-discussions", host.id, bound?.id, bound?.branch, pr?.number, pr?.headSha], queryFn: () => threadsCall({ workspaceId: bound!.id, prNumber: pr!.number }), enabled: !!bound && !!pr, refetchInterval: 30000, retry: false });
+  useEffect(() => {
+    if (!bound) return;
+    const changed = snapshot.data?.workspace.id === bound.id && snapshot.data.workspace.branch !== bound.branch;
+    const associationLost = [snapshot.error, document.error].some(error => error?.message.includes("PR is no longer associated with this workspace."));
+    if (changed || associationLost) { void catalog.refetch(); void pullRequests.refetch(); }
+  }, [bound?.id, bound?.branch, snapshot.data?.workspace.branch, snapshot.error, document.error]);
   useEffect(() => {
     // A freshly verified workspace may recover from an older cached terminal error.
     const failed = [snapshot, document, pullRequests, local, discussions].find((query) => query.errorUpdatedAt >= catalog.dataUpdatedAt && workspaceEmptyError(query.error));
@@ -212,7 +219,7 @@ export function DiffPanel({ theme, host, params, tab, cleanupInitiallyOpen = fal
   useEffect(() => { if (view !== "changes" || pendingThread || jump || !restoreScroll.current) return; const frame = requestAnimationFrame(() => { restoreScroll.current = false; list.current?.scrollToOffset({ offset: savedScroll.current, animated: false }); }); return () => cancelAnimationFrame(frame); }, [view]);
   const toggleThread = (id: string) => { setCurrentThreadId(id); setOpenedThreads((previous) => { const ids = new Set(previous.version === version ? previous.ids : []); if (!ids.delete(id)) ids.add(id); return { version, ids: [...ids] }; }); };
   const commentProps = (file: ReviewFile) => { const threads = fileDiscussions(file, inlineThreads); return { commentCount: threads.length, onComments: () => { const first = threads.find((thread) => !thread.resolved) ?? threads[0]; if (first) jumpThread(first); } }; };
-  const header = reviewHeader({ hasWorkspace: !!bound, result: pullRequests.data, pending: pullRequests.isPending, error: !!pullRequests.error });
+  const header = reviewHeader({ hasWorkspace: !!bound, result: currentPrResult, pending: pullRequests.isPending, error: !!pullRequests.error });
   const collapseAction = <ToolButton icon="ListCollapse" label={t(collapsed.size ? "expandAll" : "collapseAll")} colors={colors} touch={!wide} onPress={() => mutate({ collapsed: collapsed.size ? [] : files.map((f) => f.path) })} />;
   const refreshAction = <ToolButton icon="RefreshCw" label={t("refresh")} colors={colors} touch={!wide} onPress={refresh} />;
   const indexAction = <ToolButton icon={wide ? "PanelRight" : "List"} label={t((wide ? indexShown : indexOpen) ? "hideFileList" : "showFileList")} colors={colors} touch={!wide} active={wide ? indexShown : indexOpen} expanded={wide ? indexShown : indexOpen} onPress={() => {
@@ -237,9 +244,9 @@ export function DiffPanel({ theme, host, params, tab, cleanupInitiallyOpen = fal
   const actions = <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>{bound ? wide ? <>{canSearch ? searchAction : null}{files.length ? collapseAction : null}{refreshAction}{moreAction}{files.length ? indexAction : null}</>
     : !canSearch && !canFilter && !files.length ? moreAction : <>{canSearch && size.width >= 380 ? searchAction : null}{moreAction}{files.length ? indexAction : null}</> : refreshAction}</View>;
   return <View style={{ flex: 1, minHeight: 0, backgroundColor: colors.surface0 }} testID="devspace-diff-panel" onLayout={(event) => { const width = event.nativeEvent.layout.width; if (width > 0) setSize((previous) => previous.width === width ? previous : { ...previous, width }); }}>
-    {pr && header.mode === "pull-request" ? <PullRequestStatus result={pullRequests.data} loading={false} error={null} colors={colors} compact={!wide} selectedNumber={pr.number} onSelect={(prNumber) => save({ ...state, prNumber, filter: "all", scope: "", reviewed: {}, collapsed: [] })} workspaceId={bound?.id} maxChecksHeight={size.height} maxChecksWidth={size.width - 24} onCheckFeedback={checkFeedback} hostId={host.id} onPrUpdated={refresh} onCleanup={bound?.mode === "worktree" ? () => setCleanupOpen(true) : undefined} mergeReady={comparison !== "pr" || document.data?.snapshot.headSha === pr.headSha} />
+    {pr && header.mode === "pull-request" ? <PullRequestStatus result={currentPrResult} loading={false} error={null} colors={colors} compact={!wide} selectedNumber={pr.number} onSelect={(prNumber) => save({ ...state, prNumber, filter: "all", scope: "", reviewed: {}, collapsed: [] })} workspaceId={bound?.id} maxChecksHeight={size.height} maxChecksWidth={size.width - 24} onCheckFeedback={checkFeedback} hostId={host.id} onPrUpdated={refresh} onCleanup={bound?.mode === "worktree" ? () => setCleanupOpen(true) : undefined} mergeReady={comparison !== "pr" || document.data?.snapshot.headSha === pr.headSha} />
       : <View style={{ paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 8 }}><Icon name={bound ? "GitBranch" : "FileDiff"} size={14} color={colors.foregroundMuted} /><Text style={{ color: colors.foreground, fontSize: 12, fontWeight: "600", flex: 1 }} numberOfLines={1}>{bound?.branch ?? t("codeReview")}</Text>{!bound ? actions : null}</View>}
-    {header.showPrNotice ? <PullRequestStatus result={pullRequests.data} loading={pullRequests.isPending} error={pullRequests.error} colors={colors} compact={!wide} /> : null}
+    {header.showPrNotice ? <PullRequestStatus result={currentPrResult} loading={pullRequests.isPending} error={pullRequests.error} colors={colors} compact={!wide} /> : null}
     {pr ? <ReviewTabs view={view} count={discussions.data?.threads.length} compact={!wide} colors={colors} onChange={changeView} canNavigate={currentThreads.length > 0} onNavigate={(direction) => { const thread = nextDiscussion(currentThreads, currentThreadId, direction); if (thread) jumpThread(thread); }} /> : null}
     {pr && bound && view === "comments" ? <View style={{ flex: 1, minHeight: 0 }}>
       {discussions.isPending ? <ActivityIndicator color={colors.foregroundMuted} style={{ margin: 20 }} /> : discussions.error ? <Pressable accessibilityRole="button" onPress={() => void discussions.refetch()} style={{ padding: 16 }}><Text style={{ color: colors.statusDanger, fontSize: 13 }}>{t("prUnavailable")} · {t("retry")}</Text></Pressable> : <Discussions threads={discussions.data?.threads ?? []} resolved={showResolved} onResolved={setShowResolved} onJump={jumpThread} onFeedback={threadFeedback} colors={colors} inlineAvailable={!!inlineAvailable} truncated={!!discussions.data?.truncated} />}

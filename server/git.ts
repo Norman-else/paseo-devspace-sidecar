@@ -112,7 +112,7 @@ export class LocalDiff {
       const remoteName = preferences.find((name) => names.includes(name)) ?? (names.includes("origin") ? "origin" : names.length === 1 ? names[0] : null);
       if (!remoteName) return this.github.unavailable("no_remote");
       const [remote, localHeadSha] = await Promise.all([git(root, ["remote", "get-url", "--push", "--", remoteName]), git(root, ["rev-parse", "HEAD"])]);
-      return this.github.read({ root, branch: workspace.branch, remote: remote.trim(), localHeadSha: localHeadSha.trim() });
+      return this.github.read({ root, branch: workspace.branch, mode: workspace.mode, remote: remote.trim(), localHeadSha: localHeadSha.trim() });
     } catch { return this.github.unavailable("request_failed"); }
   }
   async snapshot(id: string, comparison: Comparison, options: ReviewOptions = {}): Promise<Snapshot> {
@@ -234,6 +234,7 @@ export class LocalDiff {
   }
   private async knownPr(id: string, number?: number) {
     const result = await this.pullRequests(id);
+    if (result.status === "none") throw new Error("PR is no longer associated with this workspace.");
     if (result.status !== "available") throw new Error("PR status is unavailable. Refresh to retry.");
     const pr = number ? result.pullRequests.find((pr) => pr.number === number) : result.pullRequests[0];
     if (!pr) throw new Error("PR is no longer associated with this workspace.");

@@ -8,7 +8,7 @@ const input = { root: "/registered/worktree", remote: "git@github.com:Owner/Repo
 const pr = (overrides: object = {}) => ({ number: 123, title: "Task changes", url: "https://github.com/Owner/Repo/pull/123", state: "OPEN", isDraft: false,
   baseRefName: "main", headRefName: input.branch, headRefOid: "last-push", headRepositoryOwner: { login: "Owner" }, headRepository: { name: "Repo" },
   reviewDecision: "REVIEW_REQUIRED", mergeable: "MERGEABLE", updatedAt: "2026-11-11T00:00:00Z", statusCheckRollup: [], ...overrides });
-const reader = (pullRequests: unknown[]) => new PullRequests(async (_root, args) => args[0] === "repo" ? JSON.stringify({ nameWithOwner: "Owner/Repo", parent: null }) : JSON.stringify(pullRequests));
+const reader = (pullRequests: unknown[]) => new PullRequests(async (_root, args) => args[0] === "repo" ? JSON.stringify({ nameWithOwner: "Owner/Repo", defaultBranchRef: { name: "main" }, parent: null }) : JSON.stringify(pullRequests));
 
 test("GitHub identities support SSH and credentialed HTTPS without retaining credentials", () => {
   assert.equal(githubRepository("git@github.com:Owner/Repo.git"), "Owner/Repo");
@@ -51,7 +51,7 @@ test("fork lookup resolves its parent and filters out another owner's same-named
   const calls: string[][] = [];
   const github = new PullRequests(async (_root, args) => {
     calls.push(args);
-    if (args[0] === "repo") return JSON.stringify({ nameWithOwner: "Owner/Repo", parent: { nameWithOwner: "Upstream/Repo" } });
+    if (args[0] === "repo") return JSON.stringify({ nameWithOwner: "Owner/Repo", defaultBranchRef: { name: "main" }, parent: { nameWithOwner: "Upstream/Repo" } });
     return JSON.stringify([pr({ number: 999, headRepositoryOwner: { login: "SomeoneElse" } }), pr()]);
   });
   const result = await github.read(input);
@@ -94,4 +94,40 @@ test("Review uses exactly one context header for PR, no-PR, loading and failure 
   assert.deepEqual(reviewHeader({ hasWorkspace: false, result: available, pending: true, error: false }), { mode: "none", showPrNotice: false });
   const merged = await reader([pr({ state: "MERGED" })]).read(input);
   assert.equal(reviewHeader({ hasWorkspace: true, result: merged, pending: false, error: false }).mode, "pull-request");
+});
+
+test('a shared default branch never auto-selects another task PR, including open or closed history', async () => {
+  for (const branch of ['master', 'main', 'trunk']) {
+    const calls: string[][] = [];
+    const github = new PullRequests(async (_root, args) => {
+      calls.push(args);
+      if (args[0] === 'repo') return JSON.stringify({ nameWithOwner: 'Owner/Repo', parent: null, defaultBranchRef: { name: branch } });
+      return JSON.stringify([pr({ number: 4274, headRefName: branch, baseRefName: 'transaction-log-new', state: 'CLOSED' }), pr({ number: 5678, headRefName: branch })]);
+    });
+    const result = await github.read({ ...input, branch, mode: 'checkout' });
+    assert.equal(result.status, 'none');
+    assert.equal(calls.some(args => args[0] === 'pr'), false);
+  }
+});
+
+test('checkout history requires the exact current HEAD and cannot fall back to an unrelated recently updated PR', async () => {
+  const historical = [pr({ number: 999, state: 'CLOSED', headRefOid: 'someone-elses-head', updatedAt: '2026-11-13' }), pr({ number: 123, state: 'MERGED', headRefOid: input.localHeadSha, updatedAt: '2026-11-11' })];
+  const matching = await reader(historical).read({ ...input, mode: 'checkout' });
+  assert.deepEqual(matching.status === 'available' && matching.pullRequests.map(pr => pr.number), [123]);
+  assert.equal((await reader(historical.slice(0, 1)).read({ ...input, mode: 'checkout' })).status, 'none');
+  const taskWorktree = await reader([pr({ state: 'MERGED', headRefOid: 'pushed-head' })]).read({ ...input, mode: 'worktree' });
+  assert.equal(taskWorktree.status, 'available'); // Later local commits must still be visible to cleanup preflight.
+});
+
+test('checkout can still display its open task PR with later unpushed commits', async () => {
+  const result = await reader([pr({ headRefOid: 'pushed-head' })]).read({ ...input, mode: 'checkout' });
+  assert.equal(result.status, 'available');
+});
+
+test('a response from a previous branch cannot select the PR for the current checkout', async () => {
+  const { branchPullRequests } = await import('../shared/review-header.ts');
+  const result = await reader([pr()]).read(input);
+  assert.equal(branchPullRequests(result, 'master'), undefined);
+  assert.equal(branchPullRequests(result, null), undefined);
+  assert.equal(branchPullRequests(result, input.branch), result);
 });
