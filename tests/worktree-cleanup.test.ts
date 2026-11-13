@@ -53,10 +53,10 @@ test('restart reconciles receipts without repeating a deletion; locked worktrees
  const fresh=await f.engine.preview('ws_test'),id=randomUUID();await f.engine.execute('ws_test',fresh.token,id);await f.wait(id);const restarted=new DevspaceLifecycle(f.runtime,join(f.dir,'state'));assert.equal((await restarted.status('ws_test',id)).phase,'done');
  }finally{await f.finish();}
 });
-function mockPaseo() {
+function mockPaseo(workspaceIds: string[] = ['ws_test']) {
   const actor = { id:'agent1',title:'Task',status:'idle',pendingPermissions:[],activeTurn:null,archivedAt:null,cwd:'/vps/context' };
   let archives=0, archiveFails=false;
-  const api = { agents: { list: async()=>({entries:[{agent:actor}],pageInfo:{hasMore:false}}), ref:()=>({ timeline:{refetch:async()=>({hasOlder:false,entries:[{item:{type:'tool_call',name:'mcp__devspace__bash',status:'completed',input:{workspace_id:'ws_test'}}}]})},refresh:async()=>({agent:actor}), archive:async()=>{archives++;if(archiveFails)throw new Error('offline');actor.archivedAt='now';} }) } };
+  const api = { agents: { list: async()=>({entries:[{agent:actor}],pageInfo:{hasMore:false}}), ref:()=>({ timeline:{refetch:async()=>({hasOlder:false,entries:workspaceIds.map(id=>({item:{type:'tool_call',name:'mcp__devspace__bash',status:'completed',input:{workspace_id:id}}}))})},refresh:async()=>({agent:actor}), archive:async()=>{archives++;if(archiveFails)throw new Error('offline');actor.archivedAt='now';} }) } };
   return { actor,api, archives:()=>archives,setArchiveFails:(value:boolean)=>{archiveFails=value;} };
 }
 test('archive happens only after verified local success; archive retry never repeats cleanup and survives restart', async()=>{
@@ -92,4 +92,14 @@ test('cleanup routes remain pinned to their source after removal and plugin rest
  await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));const port=(server.address() as any).port,sources=[{endpoint:`http://127.0.0.1:${port}`,token:'x'.repeat(40)}],path=join(dir,'routes.json');
  try{let router=new RemoteSources(sources,path);await router.request({op:'cleanup-preview',workspaceId:'ws_test'});active=false;await router.request({op:'catalog'});router=new RemoteSources(sources,path);await router.request({op:'cleanup-status',workspaceId:'ws_test',requestId:randomUUID()});assert.equal(calls.at(-1),'cleanup-status');}
  finally{server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()));await rm(dir,{recursive:true,force:true});}
+});
+test('historical main checkout and same-root aliases do not disable archiving; actual other worktrees are named',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'cleanup-archive-scope-'));const ids=['ws_test','ws_main','ws_alias'],mock=mockPaseo(ids);
+ const workspace=(id:string,root:string,mode:string)=>({id,root,sourceRoot:mode==='worktree'?'/local/repo':null,mode,baseSha:null,branch:id,lastUsedAt:'now'});
+ const catalog=[workspace('ws_test','/local/trees/task','worktree'),workspace('ws_main','/local/repo','checkout'),workspace('ws_alias','/local/trees/./task','worktree')];
+ const sourceId=randomUUID();const request=async(input:any)=>input.op==='catalog'?catalog:input.op==='pull-requests'?{status:'none',repository:'test/repo',branch:'task',checkedAt:'now'}:{sourceId,token:randomUUID(),workspaceId:'ws_test',root:'/local/trees/task',sourceRoot:'/local/repo',head:'abc',branch:'task',lastUsedAt:'now',blockers:[],changeCount:0,precious:[]};
+ const c=new CleanupCoordinator(join(dir,'state.json'),request,async()=>null);
+ try{const first=await c.preview({agentId:'agent1',workspaceId:'ws_test'},mock.api as any);assert.equal(first.archiveAllowed,true);assert.deepEqual(first.otherWorktrees,[]);
+ ids.push('ws_other');catalog.push(workspace('ws_other','/local/trees/another-task','worktree'));const second=await c.preview({agentId:'agent1',workspaceId:'ws_test'},mock.api as any);assert.equal(second.archiveAllowed,false);assert.deepEqual(second.otherWorktrees,[{id:'ws_other',root:'/local/trees/another-task',branch:'ws_other'}]);assert.equal(mock.archives(),0);
+ }finally{c.close();await rm(dir,{recursive:true,force:true});}
 });

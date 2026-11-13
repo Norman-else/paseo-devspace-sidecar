@@ -1,3 +1,4 @@
+import { samePath } from "./paths";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname, delimiter } from "node:path";
@@ -64,9 +65,10 @@ export class CleanupCoordinator {
     const shared = agents.some(a => !affected.has(a.id) && !a.archivedAt && (this.state.bindings[a.id]?.ids.includes(workspaceId) || a.cwd === root));
     const blocked = shared ? ['shared'] : related.some(busy) ? ['agents_busy'] : [];
     const active = z.array(workspaceSchema).parse(await this.request({ op: 'catalog' }));
-    const activeIds = new Set(active.map(w => w.id));
-    const other = related.some(a => (this.state.bindings[a.id]?.ids ?? []).some(id => id !== workspaceId && activeIds.has(id)));
-    return { related, blocked, other, affected: [...affected].sort() };
+    const relatedIds = new Set(related.flatMap(a => this.state.bindings[a.id]?.ids ?? []));
+    // An old call against the main checkout is not another task worktree.
+    const otherWorktrees = active.filter(w => w.mode === 'worktree' && w.id !== workspaceId && !samePath(w.root, root) && relatedIds.has(w.id));
+    return { related, blocked, other: otherWorktrees.length > 0, otherWorktrees, affected: [...affected].sort() };
   }
   async preview(input: { agentId: string; workspaceId: string; prNumber?: number }, paseo: PaseoApi) {
     const local = sourcePreviewSchema.parse(await this.request({ op: 'cleanup-preview', workspaceId: input.workspaceId }));
@@ -76,7 +78,7 @@ export class CleanupCoordinator {
     const pr = prs.status === 'available' ? input.prNumber ? prs.pullRequests.find(p => p.number === input.prNumber) : prs.pullRequests[0] : undefined;
     const blockers = [...local.blockers, ...actors.blocked];
     if (pr?.state === 'MERGED' && pr.headSha !== local.head) blockers.push('head_changed');
-    const preview = cleanupPreviewSchema.parse({ ...local, blockers, planId: randomUUID(), prState: pr?.state ?? (prs.status === 'none' ? 'NONE' : 'UNKNOWN'), prNumber: pr?.number ?? null, archiveAllowed: !actors.other, archiveReason: actors.other ? 'other_worktrees' : null, agents: actors.related.map(a => ({ id: a.id, title: a.title ?? a.id, status: a.status })) });
+    const preview = cleanupPreviewSchema.parse({ ...local, blockers, planId: randomUUID(), prState: pr?.state ?? (prs.status === 'none' ? 'NONE' : 'UNKNOWN'), prNumber: pr?.number ?? null, archiveAllowed: !actors.other, archiveReason: actors.other ? 'other_worktrees' : null, otherWorktrees: actors.otherWorktrees.map(w => ({ id: w.id, root: w.root, branch: w.branch })), agents: actors.related.map(a => ({ id: a.id, title: a.title ?? a.id, status: a.status })) });
     this.state.plans[preview.planId] = { preview, agentId: input.agentId, affected: actors.affected, expires: Date.now() + 300000 };
     for (const [id,p] of Object.entries(this.state.plans)) if (p.expires < Date.now()) delete this.state.plans[id];
     this.save(); return preview;
