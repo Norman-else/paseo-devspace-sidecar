@@ -1,3 +1,4 @@
+import { archiveEmptyPaseoWorkspaces, type WorkspaceTarget } from "./paseo-workspace-cleanup";
 import { samePath } from "./paths";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
@@ -17,7 +18,7 @@ import { z } from 'zod';
 const exec = promisify(execFile);
 const paseoCommand = [join(homedir(), '.local/bin/paseo'), join(homedir(), '.bun/bin/paseo')].find(path => existsSync(path)) ?? 'paseo';
 type Binding = { ids: string[]; parent: string | null; complete: boolean };
-type Plan = { preview: CleanupPreview; agentId: string; affected: string[]; expires: number };
+type Plan = { preview: CleanupPreview; agentId: string; affected: string[]; expires: number; paseoWorkspaces?: WorkspaceTarget[] };
 type Job = { result: CleanupResult; plan: Plan; attempted: boolean };
 type State = { bindings: Record<string, Binding>; plans: Record<string, Plan>; jobs: Record<string, Job> };
 const busy = (a: PaseoAgent) => a.status === 'running' || a.status === 'initializing' || !!a.activeTurn || a.pendingPermissions.length > 0;
@@ -47,6 +48,16 @@ export class CleanupCoordinator {
     this.state.bindings[agentId] = { ids: [...ids], parent: parent === undefined ? await this.parentOf(agentId) : parent, complete: true }; this.save();
   }
   receipt(agentId: string) { return Object.values(this.state.jobs).filter(j => j.plan.agentId === agentId).at(-1)?.result; }
+  async workspaceReceipt(workspaceId: string, paseo: PaseoApi) {
+    for (const job of Object.values(this.state.jobs).reverse()) {
+      if (job.plan.paseoWorkspaces?.some(workspace => workspace.id === workspaceId)) return job.result;
+      if (!job.plan.paseoWorkspaces) {
+        const current = await Promise.all(job.plan.affected.map(id => paseo.agents.ref(id).refresh()));
+        if (current.some(value => value?.agent.workspaceId === workspaceId)) return job.result;
+      }
+    }
+    return null;
+  }
   private async actors(paseo: PaseoApi, agentId: string, workspaceId: string, root: string) {
     const agents: PaseoAgent[] = []; let cursor: string | undefined;
     for (let count = 0; ; count++) {
@@ -79,7 +90,7 @@ export class CleanupCoordinator {
     const blockers = [...local.blockers, ...actors.blocked];
     if (pr?.state === 'MERGED' && pr.headSha !== local.head) blockers.push('head_changed');
     const preview = cleanupPreviewSchema.parse({ ...local, blockers, planId: randomUUID(), prState: pr?.state ?? (prs.status === 'none' ? 'NONE' : 'UNKNOWN'), prNumber: pr?.number ?? null, archiveAllowed: !actors.other, archiveReason: actors.other ? 'other_worktrees' : null, otherWorktrees: actors.otherWorktrees.map(w => ({ id: w.id, root: w.root, branch: w.branch })), agents: actors.related.map(a => ({ id: a.id, title: a.title ?? a.id, status: a.status })) });
-    this.state.plans[preview.planId] = { preview, agentId: input.agentId, affected: actors.affected, expires: Date.now() + 300000 };
+    this.state.plans[preview.planId] = { preview, agentId: input.agentId, affected: actors.affected, paseoWorkspaces: this.workspaceTargets(actors.related), expires: Date.now() + 300000 };
     for (const [id,p] of Object.entries(this.state.plans)) if (p.expires < Date.now()) delete this.state.plans[id];
     this.save(); return preview;
   }
@@ -93,6 +104,20 @@ export class CleanupCoordinator {
       this.state.jobs[result.requestId] = { result, plan, attempted: false }; this.save(); return result;
     }).finally(() => this.executing.delete(input.planId)); this.executing.set(input.planId, task); return task;
   }
+  private workspaceTargets(agents: PaseoAgent[]): WorkspaceTarget[] {
+    return [...new Map(agents.filter(agent => agent.workspaceId).map(agent => [agent.workspaceId!, { id: agent.workspaceId!, directory: agent.cwd }])).values()];
+  }
+  private sameWorkspaceTargets(left: WorkspaceTarget[], right: WorkspaceTarget[]) {
+    return left.length === right.length && left.every(target => right.some(other => other.id === target.id && samePath(other.directory, target.directory)));
+  }
+  private async finishWorkspaces(job: Job, paseo: PaseoApi) {
+    if (!job.plan.paseoWorkspaces) {
+      const current = await Promise.all(job.plan.affected.map(id => paseo.agents.ref(id).refresh()));
+      if (current.some(value => !value?.agent.archivedAt)) throw new Error('Confirm conversation archiving before closing its Paseo workspace.');
+      job.plan.paseoWorkspaces = this.workspaceTargets(current.map(value => value!.agent)); this.save();
+    }
+    await archiveEmptyPaseoWorkspaces(paseo, job.plan.paseoWorkspaces, job.result.workspaceCleanup, rows => { job.result.workspaceCleanup = rows; this.save(); });
+  }
   private async executeOnce(input: { planId: string; archive: boolean; acknowledgeUnmerged: boolean }, paseo: PaseoApi) {
     const prior = Object.values(this.state.jobs).find(j => j.plan.preview.planId === input.planId);
     if (prior) return this.status(prior.result.requestId, paseo, false);
@@ -100,7 +125,7 @@ export class CleanupCoordinator {
     if (!plan || plan.expires < Date.now()) throw new Error('Cleanup preview expired. Refresh before confirming.');
     if (plan.preview.blockers.length || input.archive && !plan.preview.archiveAllowed || plan.preview.prState !== 'MERGED' && !input.acknowledgeUnmerged) throw new Error('Review the cleanup requirements before confirming.');
     const actors = await this.actors(paseo, plan.agentId, plan.preview.workspaceId, plan.preview.root);
-    if (actors.blocked.length || actors.affected.join() !== plan.affected.join() || input.archive && actors.other) throw new Error('The associated sessions changed or are busy. Refresh the preview.');
+    if (actors.blocked.length || actors.affected.join() !== plan.affected.join() || input.archive && (actors.other || plan.paseoWorkspaces && !this.sameWorkspaceTargets(plan.paseoWorkspaces, this.workspaceTargets(actors.related)))) throw new Error('The associated sessions changed or are busy. Refresh the preview.');
     // Refresh PR identity, independent of the client display.
     const prs = pullRequestResultSchema.parse(await this.request({ op: 'pull-requests', workspaceId: plan.preview.workspaceId }));
     if (plan.preview.prState === 'MERGED' && (prs.status !== 'available' || !prs.pullRequests.some(p => p.number === plan.preview.prNumber && p.state === 'MERGED' && p.headSha === plan.preview.head))) throw new Error('The merged PR identity could not be verified. Refresh the preview.');
@@ -119,6 +144,7 @@ export class CleanupCoordinator {
     this.working.add(id);
     try {
       const result = job.result;
+      const repairCompleted = result.phase === 'done' && result.archive && retryArchive;
       if (['cleaning','unknown'].includes(result.phase)) {
         const local = sourceJobSchema.parse(await this.request({ op: 'cleanup-status', workspaceId: result.workspaceId, requestId: id }));
         result.recoveryRef = local.recoveryRef; result.error = local.error;
@@ -129,13 +155,20 @@ export class CleanupCoordinator {
       if (result.phase === 'archive_pending' && retryArchive) {
         try {
           const existing = await Promise.all(job.plan.affected.map(id => paseo.agents.ref(id).refresh()));
-          if (existing.every(value => value?.agent.archivedAt)) { result.phase = 'done'; result.error = null; this.save(); return result; }
+          if (existing.every(value => value?.agent.archivedAt)) { await this.finishWorkspaces(job, paseo); result.phase = 'done'; result.error = null; this.save(); return result; }
           const actors = await this.actors(paseo, job.plan.agentId, result.workspaceId, result.root);
-          if (actors.blocked.length || actors.other || actors.affected.join() !== job.plan.affected.join()) throw new Error('Sessions changed, are busy, or use another worktree. Retry archiving after reviewing them.');
+          if (actors.blocked.length || actors.other || actors.affected.join() !== job.plan.affected.join() || job.plan.paseoWorkspaces && !this.sameWorkspaceTargets(job.plan.paseoWorkspaces, this.workspaceTargets(actors.related))) throw new Error('Sessions changed, are busy, or use another worktree. Retry archiving after reviewing them.');
           // Recheck immediately before the public, non-force archive operation.
           for (const a of actors.related) { const fresh = await paseo.agents.ref(a.id).refresh(); if (!fresh || busy(fresh.agent)) throw new Error('An associated session is running. Retry archiving when it is idle.'); }
-          await paseo.agents.ref(job.plan.agentId).archive(); result.phase = 'done'; result.error = null;
+          await paseo.agents.ref(job.plan.agentId).archive();
+          const archived = await Promise.all(job.plan.affected.map(id => paseo.agents.ref(id).refresh()));
+          if (archived.some(value => !value?.agent.archivedAt)) throw new Error('Conversation archiving is not yet confirmed.');
+          await this.finishWorkspaces(job, paseo); result.phase = 'done'; result.error = null;
         } catch (error) { result.error = error instanceof Error ? error.message : 'Session archiving is pending.'; }
+        this.save();
+      }
+      if (repairCompleted) {
+        try { await this.finishWorkspaces(job, paseo); result.error = null; } catch (error) { result.phase = 'archive_pending'; result.error = error instanceof Error ? error.message : 'Empty Paseo workspace archiving is pending.'; }
         this.save();
       }
       return result;

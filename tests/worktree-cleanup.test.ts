@@ -54,10 +54,10 @@ test('restart reconciles receipts without repeating a deletion; locked worktrees
  }finally{await f.finish();}
 });
 function mockPaseo(workspaceIds: string[] = ['ws_test']) {
-  const actor = { id:'agent1',title:'Task',status:'idle',pendingPermissions:[],activeTurn:null,archivedAt:null,cwd:'/vps/context' };
-  let archives=0, archiveFails=false;
-  const api = { agents: { list: async()=>({entries:[{agent:actor}],pageInfo:{hasMore:false}}), ref:()=>({ timeline:{refetch:async()=>({hasOlder:false,entries:workspaceIds.map(id=>({item:{type:'tool_call',name:'mcp__devspace__bash',status:'completed',input:{workspace_id:id}}}))})},refresh:async()=>({agent:actor}), archive:async()=>{archives++;if(archiveFails)throw new Error('offline');actor.archivedAt='now';} }) } };
-  return { actor,api, archives:()=>archives,setArchiveFails:(value:boolean)=>{archiveFails=value;} };
+  const actor = { workspaceId:'wks_task', id:'agent1',title:'Task',status:'idle',pendingPermissions:[],activeTurn:null,archivedAt:null,cwd:'/vps/context' };
+  let archives=0, archiveFails=false, workspaceActive=true, workspaceArchives=0;
+  const api = { workspaces: { ref: () => ({ refresh: async()=>workspaceActive?{id:'wks_task',name:'Task workspace',workspaceDirectory:actor.cwd,workspaceKind:'directory',scripts:[]}:null, terminals:{list:async()=>({entries:[]})}, archive:async()=>{workspaceArchives++;workspaceActive=false;return {archivedAt:'now',error:null};} }) }, agents: { list: async()=>({entries:[{agent:actor}],pageInfo:{hasMore:false}}), ref:()=>({ timeline:{refetch:async()=>({hasOlder:false,entries:workspaceIds.map(id=>({item:{type:'tool_call',name:'mcp__devspace__bash',status:'completed',input:{workspace_id:id}}}))})},refresh:async()=>({agent:actor}), archive:async()=>{archives++;if(archiveFails)throw new Error('offline');actor.archivedAt='now';} }) } };
+  return { actor,api, archives:()=>archives, workspaceArchives:()=>workspaceArchives,setArchiveFails:(value:boolean)=>{archiveFails=value;} };
 }
 test('archive happens only after verified local success; archive retry never repeats cleanup and survives restart', async()=>{
  const dir=await mkdtemp(join(tmpdir(),'cleanup-coordinator-')),mock=mockPaseo();let removes=0,phase='closing';
@@ -75,7 +75,7 @@ test('archive happens only after verified local success; archive retry never rep
  plan=await c.preview({agentId:'agent1',workspaceId:'ws_test'},mock.api as any);
  const input={planId:plan.planId,archive:true,acknowledgeUnmerged:true};const [job,duplicate]=await Promise.all([c.execute(input,mock.api as any),c.execute(input,mock.api as any)]);assert.equal(job.requestId,duplicate.requestId);assert.equal(removes,1);assert.equal(mock.archives(),0);
  await c.status(job.requestId,mock.api as any,false);assert.equal(mock.archives(),0);phase='done';mock.setArchiveFails(true);assert.equal((await c.status(job.requestId,mock.api as any,false)).phase,'archive_pending');assert.equal(removes,1);
- c.close();c=new CleanupCoordinator(path,request,async()=>null);mock.setArchiveFails(false);assert.equal((await c.status(job.requestId,mock.api as any,true)).phase,'done');assert.equal(removes,1);assert.equal(mock.archives(),2);
+ c.close();c=new CleanupCoordinator(path,request,async()=>null);mock.setArchiveFails(false);assert.equal((await c.status(job.requestId,mock.api as any,true)).phase,'done');assert.equal(removes,1);assert.equal(mock.archives(),2);assert.equal(mock.workspaceArchives(),1);
  assert.throws(()=>c.assertCanOpen('agent1','interactive'),/closed/);c.assertCanOpen('agent1','history');
  }finally{c.close();await rm(dir,{recursive:true,force:true});}
 });
@@ -102,4 +102,25 @@ test('historical main checkout and same-root aliases do not disable archiving; a
  try{const first=await c.preview({agentId:'agent1',workspaceId:'ws_test'},mock.api as any);assert.equal(first.archiveAllowed,true);assert.deepEqual(first.otherWorktrees,[]);
  ids.push('ws_other');catalog.push(workspace('ws_other','/local/trees/another-task','worktree'));const second=await c.preview({agentId:'agent1',workspaceId:'ws_test'},mock.api as any);assert.equal(second.archiveAllowed,false);assert.deepEqual(second.otherWorktrees,[{id:'ws_other',root:'/local/trees/another-task',branch:'ws_other'}]);assert.equal(mock.archives(),0);
  }finally{c.close();await rm(dir,{recursive:true,force:true});}
+});
+test('workspace archive failure remains retryable after agent archival without repeating local deletion or agent archive',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'cleanup-workspace-retry-')),mock=mockPaseo();let deletes=0,failWorkspace=true;
+ const original=mock.api.workspaces.ref;
+ mock.api.workspaces.ref=()=>{const handle=original();return {...handle,archive:async()=>failWorkspace?{error:'workspace API unavailable',archivedAt:null}:handle.archive()};};
+ const token=randomUUID(),sourceId=randomUUID();
+ const request=async(input:any)=>input.op==='catalog'?[{id:'ws_test',root:'/tree',sourceRoot:'/repo',mode:'worktree',baseSha:null,branch:'task',lastUsedAt:'now'}]:input.op==='pull-requests'?{status:'none',repository:'test/repo',branch:'task',checkedAt:'now'}:input.op==='cleanup-preview'?{sourceId,token,workspaceId:'ws_test',root:'/tree',sourceRoot:'/repo',head:'abc',branch:'task',lastUsedAt:'now',blockers:[],changeCount:0,precious:[]}:input.op==='cleanup-execute'?(deletes++,{workspaceId:'ws_test',requestId:input.requestId,phase:'closing',error:null,recoveryRef:'refs/recovery'}):{workspaceId:'ws_test',requestId:input.requestId,phase:'done',error:null,recoveryRef:'refs/recovery'};
+ const path=join(dir,'state.json');let c=new CleanupCoordinator(path,request,async()=>null);
+ try{const p=await c.preview({agentId:'agent1',workspaceId:'ws_test'},mock.api as any),job=await c.execute({planId:p.planId,archive:true,acknowledgeUnmerged:true},mock.api as any);
+ const pending=await c.status(job.requestId,mock.api as any,false);assert.equal(pending.phase,'archive_pending');assert.equal(pending.workspaceCleanup?.[0].state,'pending');assert.equal(mock.archives(),1);assert.equal(deletes,1);
+ assert.equal((await c.workspaceReceipt('wks_task',mock.api as any))?.requestId,job.requestId);assert.equal(await c.workspaceReceipt('wks_unrelated',mock.api as any),null);
+ c.close();failWorkspace=false;c=new CleanupCoordinator(path,request,async()=>null);assert.equal((await c.status(job.requestId,mock.api as any,true)).phase,'done');assert.equal(mock.archives(),1);assert.equal(deletes,1);assert.equal(mock.workspaceArchives(),1);
+ }finally{c.close();await rm(dir,{recursive:true,force:true});}
+});
+test('an archived legacy receipt can retire its empty Paseo workspace without any Git or agent writes',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'cleanup-legacy-workspace-')),mock=mockPaseo();mock.actor.archivedAt='old';const requestId=randomUUID();
+ const result={requestId,workspaceId:'ws_test',root:'/tree',branch:'task',phase:'done',archive:true,error:null};
+ const state={bindings:{},plans:{},jobs:{[requestId]:{result,plan:{agentId:'agent1',affected:['agent1'],preview:{workspaceId:'ws_test'},expires:0},attempted:true}}};const path=join(dir,'state.json');await writeFile(path,JSON.stringify(state));
+ const c=new CleanupCoordinator(path,async()=>{throw new Error('must not call project host');},async()=>null);
+ try{assert.equal((await c.workspaceReceipt('wks_task',mock.api as any))?.requestId,requestId);const done=await c.status(requestId,mock.api as any,true);assert.equal(done.phase,'done');assert.equal(done.workspaceCleanup?.[0].state,'archived');assert.equal(mock.archives(),0);assert.equal(mock.workspaceArchives(),1);}
+ finally{c.close();await rm(dir,{recursive:true,force:true});}
 });

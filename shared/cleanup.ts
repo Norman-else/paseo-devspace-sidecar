@@ -3,7 +3,9 @@ import { z } from 'zod';
 const id = z.string().regex(/^ws_[\w-]+$/), uuid = z.string().uuid();
 export const sourcePreviewSchema = z.object({ sourceId: uuid, workspaceId: id, root: z.string(), sourceRoot: z.string(), head: z.string(), branch: z.string().nullable(), lastUsedAt: z.string(), token: uuid, blockers: z.array(z.string()), changeCount: z.number(), precious: z.array(z.string()) });
 export const sourceJobSchema = z.object({ workspaceId: id, requestId: uuid, phase: z.enum(['closing','done','failed','unknown']), error: z.string().nullable(), recoveryRef: z.string() });
-export const cleanupResultSchema = z.object({ requestId: uuid, workspaceId: id, root: z.string(), branch: z.string().nullable(), phase: z.enum(['cleaning','archive_pending','done','failed','unknown']), archive: z.boolean(), error: z.string().nullable(), recoveryRef: z.string().optional() });
+export const paseoWorkspaceCleanupSchema = z.object({ id: z.string(), directory: z.string(), name: z.string(), state: z.enum(['pending','archived','retained']), reason: z.enum(['agents','terminals','scripts','owned_worktree','changed']).nullable() });
+export type PaseoWorkspaceCleanup = z.infer<typeof paseoWorkspaceCleanupSchema>;
+export const cleanupResultSchema = z.object({ requestId: uuid, workspaceId: id, root: z.string(), branch: z.string().nullable(), phase: z.enum(['cleaning','archive_pending','done','failed','unknown']), archive: z.boolean(), error: z.string().nullable(), recoveryRef: z.string().optional(), workspaceCleanup: z.array(paseoWorkspaceCleanupSchema).optional() });
 export type CleanupResult = z.infer<typeof cleanupResultSchema>;
 export const cleanupPreviewSchema = sourcePreviewSchema.extend({ planId: uuid, prState: z.string(), prNumber: z.number().nullable(), archiveAllowed: z.boolean(), archiveReason: z.string().nullable(), otherWorktrees: z.array(z.object({ id, root: z.string(), branch: z.string().nullable() })).default([]), agents: z.array(z.object({ id: z.string(), title: z.string(), status: z.string() })) });
 export type CleanupPreview = z.infer<typeof cleanupPreviewSchema>;
@@ -13,3 +15,5 @@ export const cleanupStatusRpc = defineRpc({ name: 'worktree.cleanup-status', inp
 export const sourcePreviewRequest = z.object({ op: z.literal('cleanup-preview'), workspaceId: id });
 export const sourceExecuteRequest = z.object({ op: z.literal('cleanup-execute'), workspaceId: id, token: uuid, requestId: uuid });
 export const sourceStatusRequest = z.object({ op: z.literal('cleanup-status'), workspaceId: id, requestId: uuid });
+
+export const cleanupReceiptRpc = defineRpc({ name: 'worktree.cleanup-receipt', input: z.object({ paseoWorkspaceId: z.string().min(1).max(200) }), output: z.object({ cleanup: cleanupResultSchema.nullable() }) });

@@ -1,6 +1,6 @@
 import { CleanupCoordinator } from "./server/cleanup-coordinator";
 import { cleanupRequest } from "./server/cleanup-client";
-import { cleanupPreviewRpc, cleanupExecuteRpc, cleanupStatusRpc } from "./shared/cleanup";
+import { cleanupPreviewRpc, cleanupExecuteRpc, cleanupStatusRpc, cleanupReceiptRpc } from "./shared/cleanup";
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { z } from "zod";
 import { catalogRpc, devspaceWorkspaceIds, fileRpc, fileResultSchema, pullRequestRpc, reviewRpc, reviewSchema, snapshotRpc, snapshotSchema, suggestedWorkspace, workspaceSchema, workspaceInspectionSchema, type BridgeRequest } from "./shared/diff";
@@ -27,6 +27,7 @@ export default function contribute(server: PluginServerContext) {
   });
   void ready.catch((error) => console.error("DevSpace Diff startup failed:", error instanceof Error ? error.message : "Unknown error"));
   const cleanup = new CleanupCoordinator(join(configDirectory, "cleanup-jobs.json"), async input => (await ready).request(input));
+  server.handle(cleanupReceiptRpc, async (input, { paseo }) => ({ cleanup: await cleanup.workspaceReceipt(input.paseoWorkspaceId, paseo) }));
   server.handle(cleanupPreviewRpc, (input, { paseo }) => cleanup.preview(input, paseo));
   server.handle(cleanupExecuteRpc, (input, { paseo }) => cleanup.execute(input, paseo));
   server.handle(cleanupStatusRpc, (input, { paseo }) => cleanup.status(input.requestId, paseo, input.retryArchive));

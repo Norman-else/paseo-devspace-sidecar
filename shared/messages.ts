@@ -1,4 +1,6 @@
 export const en = {
+  cleanupStatusTitle: "Worktree cleanup status", cleanupNoReceipt: "No worktree cleanup receipt for this Paseo workspace.", cleanupRecheckWorkspace: "Recheck workspace",
+  cleanupWorkspaceRetained: "Paseo workspace retained", cleanupWorkspaceAgents: "Another active conversation still uses this workspace.", cleanupWorkspaceTerminals: "This workspace still contains a terminal.", cleanupWorkspaceScripts: "This workspace still runs a script or service.", cleanupWorkspaceOwned: "This is a separate Paseo-owned Git worktree; it needs its own cleanup.", cleanupWorkspaceChanged: "The workspace directory changed after confirmation.",
   cleanupClose: "Close",
   cleanupTitle: "Clean up worktree",
   cleanupChecking: "Checking the worktree and associated sessions…",
@@ -14,7 +16,7 @@ export const en = {
   cleanupHeadChanged: "This worktree contains commits beyond the merged PR. Review them before cleaning.",
   cleanupBlocked: "The worktree cannot be cleaned yet.",
   cleanupSessions: "Associated conversations",
-  cleanupArchive: "Archive these conversations after local cleanup succeeds",
+  cleanupArchive: "Archive conversations and close empty Paseo workspaces after cleanup",
   cleanupOtherWorktrees: "These conversations also use other active worktrees. Cleanup is available without archiving.",
   cleanupUnmergedAck: "This PR is not confirmed merged. I have reviewed the retained branch and recovery reference.",
   cleanupNoWorkspace: "This conversation has no active DevSpace worktree to clean.",
@@ -29,7 +31,7 @@ export const en = {
   cleanupFailed: "Worktree retained",
   cleanupUnknown: "Cleanup result needs verification",
   cleanupArchivePendingHelp: "The local cleanup succeeded. Retry only the conversation archiving step.",
-  cleanupDoneArchiveHelp: "The local worktree was removed and its associated conversations were archived. Their history remains available.",
+  cleanupDoneArchiveHelp: "The local worktree was removed, its conversations were archived, and empty Paseo workspaces were closed. History remains available.",
   cleanupDoneHelp: "The local worktree was removed. Conversation history and the local branch remain available.",
   cleanupUnknownHelp: "No conversation will be archived until local cleanup is confirmed. Check the project host if this persists.",
   cleanupProgressHelp: "The local branch and conversation history will be retained.",
@@ -96,6 +98,8 @@ export const en = {
 } as const;
 
 export const zh: Record<keyof typeof en, string> = {
+  cleanupStatusTitle: "Worktree 清理状态", cleanupNoReceipt: "此 Paseo 工作区暂无 worktree 清理记录。", cleanupRecheckWorkspace: "重新检查工作区",
+  cleanupWorkspaceRetained: "Paseo 工作区已保留", cleanupWorkspaceAgents: "此工作区仍有其他活动会话。", cleanupWorkspaceTerminals: "此工作区仍有终端。", cleanupWorkspaceScripts: "此工作区仍在运行脚本或服务。", cleanupWorkspaceOwned: "这是独立的 Paseo Git worktree，需要单独处理。", cleanupWorkspaceChanged: "此工作区的目录在确认后发生了变化。",
   cleanupTitle: "清理 worktree",
   cleanupChecking: "正在检查 worktree 和关联会话…",
   cleanupDetached: "分离的 HEAD",
@@ -110,7 +114,7 @@ export const zh: Record<keyof typeof en, string> = {
   cleanupHeadChanged: "worktree 包含已合并 PR 之外的提交，请先检查。",
   cleanupBlocked: "worktree 暂时无法清理。",
   cleanupSessions: "关联会话",
-  cleanupArchive: "本地清理成功后归档这些会话",
+  cleanupArchive: "本地清理成功后归档会话，并关闭空的 Paseo 工作区",
   cleanupOtherWorktrees: "这些会话还使用其他活动 worktree，可以仅清理、不归档。",
   cleanupUnmergedAck: "PR 尚未确认合并；我已检查保留的分支和恢复引用。",
   cleanupNoWorkspace: "此会话没有可清理的活动 DevSpace worktree。",
@@ -125,7 +129,7 @@ export const zh: Record<keyof typeof en, string> = {
   cleanupFailed: "worktree 已保留",
   cleanupUnknown: "清理结果待确认",
   cleanupArchivePendingHelp: "本地清理已成功；重试只会执行会话归档。",
-  cleanupDoneArchiveHelp: "本地 worktree 已删除，关联会话已归档，历史记录仍可查看。",
+  cleanupDoneArchiveHelp: "本地 worktree 已删除，关联会话及可安全关闭的空工作区已归档，历史记录仍可查看。",
   cleanupDoneHelp: "本地 worktree 已删除，会话历史和本地分支已保留。",
   cleanupUnknownHelp: "本地清理确认成功前不会归档会话。若持续显示此状态，请检查项目主机。",
   cleanupProgressHelp: "本地分支和会话历史会保留。",
