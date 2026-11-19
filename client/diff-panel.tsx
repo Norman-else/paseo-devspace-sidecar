@@ -249,23 +249,16 @@ export function DiffPanel({ theme, host, params, tab, cleanupInitiallyOpen = fal
   const shortPath = (root: string) => root.replace(/^\/(Users|home)\/[^/]+/, "~");
   const kindLabel = (w: { root: string; mode: string; worktree?: boolean }) => t(isWorktree(w) ? "workspaceWorktree" : "workspaceCheckout");
   // Raised above later siblings so the popover is not covered by the PR header and tabs.
-  const switcher = candidates.length > 1 ? <View testID="devspace-workspace-switcher" style={{ position: "relative", zIndex: 30, borderBottomWidth: 1, borderColor: colors.border, backgroundColor: colors.surface1 }}>
-    <ReviewMenu title={t("workspaceSwitch")} colors={colors} touch={!wide} width={Math.min(420, size.width - 16)} options={[
+  const switcher = candidates.length > 1 ? <View testID="devspace-workspace-switcher" style={{ position: "relative", zIndex: 30, paddingHorizontal: 8, paddingTop: 4 }}>
+    <ReviewMenu title={t("workspaceSwitch")} colors={colors} touch={!wide} width={Math.min(340, size.width - 16)} options={[
       { id: "auto", label: t("workspaceAuto"), description: t("workspaceAutoHint"), selected: !pinned, onSelect: () => pickWorkspace(undefined) },
-      ...candidates.map((w, index) => ({ id: w.id, label: `${workspaceLabel(w)}  ·  ${kindLabel(w)}`, description: shortPath(w.root), selected: pinned && bound?.id === w.id, separatorBefore: index === 0, onSelect: () => pickWorkspace(w.id) })),
+      ...candidates.map((w, index) => ({ id: w.id, label: workspaceLabel(w), description: `${kindLabel(w)} · ${shortPath(w.root)}`, selected: pinned && bound?.id === w.id, separatorBefore: index === 0, onSelect: () => pickWorkspace(w.id) })),
     ]} trigger={({ open, toggle }) => <Pressable accessibilityRole="button" accessibilityLabel={`${t("workspaceSwitch")}: ${bound ? workspaceLabel(bound) : ""}`} aria-expanded={open} onPress={toggle}
-      style={({ pressed }) => ({ minHeight: wide ? 44 : 52, paddingHorizontal: 12, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: open || pressed ? colors.surface2 : "transparent" })}>
-      <Icon name={bound && isWorktree(bound) ? "FolderGit2" : "Folder"} size={16} color={colors.accent} />
-      <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Text numberOfLines={1} style={{ flexShrink: 1, color: colors.foreground, fontSize: 13, fontWeight: "600" }}>{bound ? workspaceLabel(bound) : t("codeReview")}</Text>
-          {bound ? <Text style={{ color: colors.accent, fontSize: 10, fontWeight: "600", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3, borderWidth: 1, borderColor: colors.accent }}>{kindLabel(bound)}</Text> : null}
-          <Text style={{ color: colors.foregroundMuted, fontSize: 11 }}>{pinned ? t("workspacePinned") : t("workspaceAuto")}</Text>
-        </View>
-        {bound ? <Text numberOfLines={1} style={{ color: colors.foregroundMuted, fontSize: 11 }}>{shortPath(bound.root)}</Text> : null}
-      </View>
-      <Text style={{ color: colors.foregroundMuted, fontSize: 11 }}>{t("workspaceCount", { count: candidates.length })}</Text>
-      <Icon name={open ? "ChevronUp" : "ChevronDown"} size={16} color={colors.foregroundMuted} />
+      style={({ pressed }) => ({ alignSelf: "flex-start", maxWidth: "100%", minHeight: wide ? 26 : 36, paddingHorizontal: 6, borderRadius: 4, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: open || pressed ? colors.surface2 : "transparent" })}>
+      <Icon name={bound && isWorktree(bound) ? "FolderGit2" : "Folder"} size={13} color={colors.foregroundMuted} />
+      <Text numberOfLines={1} style={{ flexShrink: 1, color: colors.foregroundMuted, fontSize: 12 }}>{bound ? `${kindLabel(bound)} · ${shortPath(bound.root)}` : t("codeReview")}</Text>
+      {pinned ? <Icon name="Pin" size={12} color={colors.foregroundMuted} /> : null}
+      <Icon name="ChevronsUpDown" size={12} color={colors.foregroundMuted} />
     </Pressable>} />
   </View> : null;
   return <View style={{ flex: 1, minHeight: 0, backgroundColor: colors.surface0 }} testID="devspace-diff-panel" onLayout={(event) => { const width = event.nativeEvent.layout.width; if (width > 0) setSize((previous) => previous.width === width ? previous : { ...previous, width }); }}>
