@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import { DatabaseSync } from "node:sqlite";
 import { promisify } from "node:util";
 import type { BridgeRequest, ChangedFile, Review, ReviewFile, Snapshot, Workspace } from "../shared/diff";
-import { workspaceEmptyMessages, type WorkspaceEmptyReason } from "../shared/diff";
+import { isWorktree, workspaceEmptyMessages, type WorkspaceEmptyReason } from "../shared/diff";
 import { isRelativeFile, isWithin, samePath } from "./paths";
 import { GitHubMerge } from "./github-merge";
 import type { MergeRequest } from "../shared/pr-merge";
@@ -49,7 +49,11 @@ export class LocalDiff {
   private async describe(row: StoredWorkspace): Promise<Workspace> {
     let branch: string | null = null;
     try { branch = (await git(row.root, ["symbolic-ref", "--short", "HEAD"])).trim(); } catch { /* detached or unavailable */ }
-    return { id: row.id, root: row.root, sourceRoot: row.source_root, mode: row.mode, baseSha: row.base_sha, branch, lastUsedAt: row.last_used_at };
+    // A linked worktree has a `.git` file pointing at the main repository, wherever it lives.
+    let linked = false;
+    try { linked = (await lstat(join(row.root, ".git"))).isFile(); } catch { /* missing root */ }
+    const worktree = row.mode === "worktree" || linked || isWorktree({ root: row.root, mode: row.mode });
+    return { id: row.id, root: row.root, sourceRoot: row.source_root, mode: row.mode, baseSha: row.base_sha, branch, lastUsedAt: row.last_used_at, worktree };
   }
   async catalog(): Promise<Workspace[]> { return Promise.all(this.rows().map((row) => this.describe(row))); }
   private async inspectWorkspace(id: string): Promise<{ status: "ready"; workspace: Workspace; root: string } | { status: "empty"; reason: WorkspaceEmptyReason }> {

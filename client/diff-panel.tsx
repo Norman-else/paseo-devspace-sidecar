@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRpc, useTabState, type PluginAgentPanelProps } from "@getpaseo/plugin/client";
 import { FlatList, Icon, copyText, useToast } from "@getpaseo/plugin/client/ui";
 import { z } from "zod";
-import { catalogRpc, comparison as comparisonSchema, contextRpc, checkpointRpc, threadsRpc, fileRpc, pullRequestRpc, reviewRpc, snapshotRpc, workspaceEmptyError, workspaceEmptyMessages, type WorkspaceEmptyReason, type ReviewFile, type Snapshot } from "../shared/diff";
+import { isWorktree, catalogRpc, comparison as comparisonSchema, contextRpc, checkpointRpc, threadsRpc, fileRpc, pullRequestRpc, reviewRpc, snapshotRpc, workspaceEmptyError, workspaceEmptyMessages, type WorkspaceEmptyReason, type ReviewFile, type Snapshot } from "../shared/diff";
 import { checkpointSchema, type ReviewThread, type CheckDetail } from "../shared/review-details";
 import { HEADER_HEIGHT, reviewRows, type ReviewRow, type ReviewExtras } from "../shared/review";
 import { selectedCode, selectedLines, selectLine } from "../shared/selection";
@@ -33,7 +33,7 @@ import { ContextGap } from "./context-gap";
 import { codeReviewPalette } from "../shared/appearance";
 import { fileDiscussions, nextDiscussion } from "../shared/comment-navigation";
 
-const stateSchema = z.object({ comparison: comparisonSchema, scope: z.string().default(""), collapsed: z.array(z.string()).default([]), reviewed: z.record(z.string(), z.string()).default({}), indexVisible: z.boolean().default(true), indexWidth: z.number().min(140).max(520).nullable().default(null), prNumber: z.number().int().optional(), filter: z.enum(["all", "unreviewed", "since"]).default("all"), points: z.record(z.string(), checkpointSchema).default({}), view: z.enum(["changes", "comments"]).default("changes") });
+const stateSchema = z.object({ comparison: comparisonSchema, scope: z.string().default(""), collapsed: z.array(z.string()).default([]), reviewed: z.record(z.string(), z.string()).default({}), indexVisible: z.boolean().default(true), indexWidth: z.number().min(140).max(520).nullable().default(null), prNumber: z.number().int().optional(), filter: z.enum(["all", "unreviewed", "since"]).default("all"), points: z.record(z.string(), checkpointSchema).default({}), view: z.enum(["changes", "comments"]).default("changes"), workspaceId: z.string().optional() });
 type Jump = { path: string; key?: string };
 export function DiffPanel({ theme, host, params, tab, cleanupInitiallyOpen = false }: PluginAgentPanelProps & { cleanupInitiallyOpen?: boolean }) {
   const { t, translateBackend, locale } = useMessages(), toast = useToast();
@@ -59,7 +59,7 @@ export function DiffPanel({ theme, host, params, tab, cleanupInitiallyOpen = fal
   const reviewColors = useMemo(() => codePalette.dark ? { ...colors, surface0: codePalette.background, surface1: codePalette.header, surface2: codePalette.hover, border: codePalette.border, foregroundMuted: "#a0a0a0" } : colors, [colors, codePalette]);
   useEffect(() => installSelectionCursor(colors.foreground, codePalette.background), [colors.foreground, codePalette.background]);
   const catalogCall = useRpc(catalogRpc), snapshotCall = useRpc(snapshotRpc), reviewCall = useRpc(reviewRpc), fileCall = useRpc(fileRpc), prCall = useRpc(pullRequestRpc), threadsCall = useRpc(threadsRpc), contextCall = useRpc(contextRpc), checkpointCall = useRpc(checkpointRpc);
-  const catalog = useQuery({ queryKey: ["devspace-context-v2", host.id, params.agentId], queryFn: () => catalogCall({ agentId: params.agentId }), refetchInterval: 15000, retry: false });
+  const catalog = useQuery({ queryKey: ["devspace-context-v3", host.id, params.agentId, state.workspaceId], queryFn: () => catalogCall({ agentId: params.agentId, pinnedWorkspaceId: state.workspaceId }), refetchInterval: 15000, retry: false });
   const [rejected, setRejected] = useState<{ id: string; reason: WorkspaceEmptyReason; at: number } | null>(null);
   const rejectedReason = rejected?.id === catalog.data?.workspace?.id && rejected && catalog.dataUpdatedAt <= rejected.at ? rejected.reason : undefined;
   const bound = rejectedReason ? null : catalog.data?.workspace;
@@ -243,7 +243,18 @@ export function DiffPanel({ theme, host, params, tab, cleanupInitiallyOpen = fal
   ]} />;
   const actions = <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>{bound ? wide ? <>{canSearch ? searchAction : null}{files.length ? collapseAction : null}{refreshAction}{moreAction}{files.length ? indexAction : null}</>
     : !canSearch && !canFilter && !files.length ? moreAction : <>{canSearch && size.width >= 380 ? searchAction : null}{moreAction}{files.length ? indexAction : null}</> : refreshAction}</View>;
+  const candidates = catalog.data?.candidates ?? [], pinned = !!catalog.data?.pinned;
+  const pickWorkspace = (workspaceId: string | undefined) => save({ ...latestState.current, workspaceId, prNumber: undefined, comparison: "task", filter: "all", scope: "", reviewed: {}, collapsed: [], view: "changes" });
+  const workspaceLabel = (w: { root: string; branch: string | null }) => w.branch ?? w.root.split(/[\\/]/).filter(Boolean).at(-1) ?? w.root;
+  const switcher = candidates.length > 1 ? <View testID="devspace-workspace-switcher" style={{ paddingHorizontal: 12, paddingTop: 6, flexDirection: "row", alignItems: "center", gap: 6 }}>
+    <Text style={{ color: colors.foregroundMuted, fontSize: 11 }}>{t("workspaceSwitch")}</Text>
+    <ReviewMenu title={t("workspaceSwitch")} label={(bound ? workspaceLabel(bound) : t("codeReview")) + (pinned ? "" : ` · ${t("workspaceAuto")}`)} colors={colors} touch={!wide} width={Math.min(360, size.width - 24)} options={[
+      { id: "auto", label: t("workspaceAuto"), description: t("workspaceAutoHint"), selected: !pinned, onSelect: () => pickWorkspace(undefined) },
+      ...candidates.map((w, index) => ({ id: w.id, label: `${workspaceLabel(w)}${isWorktree(w) ? ` · ${t("workspaceWorktree")}` : ""}`, description: w.root, selected: pinned && bound?.id === w.id, separatorBefore: index === 0, onSelect: () => pickWorkspace(w.id) })),
+    ]} />
+  </View> : null;
   return <View style={{ flex: 1, minHeight: 0, backgroundColor: colors.surface0 }} testID="devspace-diff-panel" onLayout={(event) => { const width = event.nativeEvent.layout.width; if (width > 0) setSize((previous) => previous.width === width ? previous : { ...previous, width }); }}>
+    {switcher}
     {pr && header.mode === "pull-request" ? <PullRequestStatus result={currentPrResult} loading={false} error={null} colors={colors} compact={!wide} selectedNumber={pr.number} onSelect={(prNumber) => save({ ...state, prNumber, filter: "all", scope: "", reviewed: {}, collapsed: [] })} workspaceId={bound?.id} maxChecksHeight={size.height} maxChecksWidth={size.width - 24} onCheckFeedback={checkFeedback} hostId={host.id} onPrUpdated={refresh} onCleanup={bound?.mode === "worktree" ? () => setCleanupOpen(true) : undefined} mergeReady={comparison !== "pr" || document.data?.snapshot.headSha === pr.headSha} />
       : <View style={{ paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 8 }}><Icon name={bound ? "GitBranch" : "FileDiff"} size={14} color={colors.foregroundMuted} /><Text style={{ color: colors.foreground, fontSize: 12, fontWeight: "600", flex: 1 }} numberOfLines={1}>{bound?.branch ?? t("codeReview")}</Text>{!bound ? actions : null}</View>}
     {header.showPrNotice ? <PullRequestStatus result={currentPrResult} loading={pullRequests.isPending} error={pullRequests.error} colors={colors} compact={!wide} /> : null}

@@ -3,7 +3,7 @@ import { cleanupRequest } from "./server/cleanup-client";
 import { cleanupPreviewRpc, cleanupExecuteRpc, cleanupStatusRpc, cleanupReceiptRpc } from "./shared/cleanup";
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { z } from "zod";
-import { catalogRpc, devspaceWorkspaceIds, fileRpc, fileResultSchema, pullRequestRpc, reviewRpc, reviewSchema, snapshotRpc, snapshotSchema, suggestedWorkspace, workspaceSchema, workspaceInspectionSchema, type BridgeRequest } from "./shared/diff";
+import { catalogRpc, devspaceWorkspaceIds, fileRpc, fileResultSchema, pullRequestRpc, reviewRpc, reviewSchema, snapshotRpc, snapshotSchema, sessionWorkspaces, suggestedWorkspace, workspaceSchema, workspaceInspectionSchema, type BridgeRequest } from "./shared/diff";
 import { pullRequestResultSchema } from "./shared/pull-request";
 import { loadConfig, configDirectory } from "./server/config";
 import { join } from "node:path";
@@ -33,7 +33,7 @@ export default function contribute(server: PluginServerContext) {
   server.handle(cleanupStatusRpc, (input, { paseo }) => cleanup.status(input.requestId, paseo, input.retryArchive));
   server.addHook("agent.open.before", async ({ request }) => { cleanup.assertCanOpen(request.agentId, request.purpose); return request; });
   server.addHook("agent.turn.after", async ({ agent }, { paseo }) => { try { await cleanup.observe(paseo, agent.id, agent.parentAgentId); } catch (error) { console.error("Cleanup association could not be updated:", error instanceof Error ? error.message : "unknown"); } });
-  server.handle(catalogRpc, async ({ agentId }, { paseo }) => {
+  server.handle(catalogRpc, async ({ agentId, pinnedWorkspaceId }, { paseo }) => {
     const receipt = cleanup.receipt(agentId);
     if (receipt && ["cleaning", "archive_pending", "done", "unknown"].includes(receipt.phase)) return { workspace: null, cleanup: receipt };
     let timeline;
@@ -42,10 +42,12 @@ export default function contribute(server: PluginServerContext) {
     if (timeline.error) return { workspace: null, inferenceError: "Unable to read this session. Refresh and try again." };
     if (!devspaceWorkspaceIds(timeline).length) return { workspace: null };
     const workspaces = z.array(workspaceSchema).parse(await (await ready).request({ op: "catalog" }));
-    const id = suggestedWorkspace(timeline, workspaces);
-    if (!id) return { workspace: null, emptyReason: "missing" as const };
+    const candidates = sessionWorkspaces(timeline, workspaces);
+    const id = suggestedWorkspace(timeline, workspaces, pinnedWorkspaceId);
+    if (!id) return { workspace: null, candidates, emptyReason: "missing" as const };
+    const pinned = id === pinnedWorkspaceId;
     const inspection = workspaceInspectionSchema.parse(await (await ready).request({ op: "inspect", workspaceId: id }));
-    return inspection.status === "ready" ? { workspace: inspection.workspace } : { workspace: null, emptyReason: inspection.reason };
+    return inspection.status === "ready" ? { workspace: inspection.workspace, candidates, pinned } : { workspace: null, candidates, pinned, emptyReason: inspection.reason };
   });
   server.handle(snapshotRpc, async (input) => snapshotSchema.parse(await (await ready).request({ op: "snapshot", ...input })));
   server.handle(fileRpc, async (input) => fileResultSchema.parse(await (await ready).request({ op: "file", ...input })));

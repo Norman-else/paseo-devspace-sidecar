@@ -5,15 +5,15 @@ import { catalogRpc } from "./shared/diff";
 import { messages } from "./client/messages";
 
 export default function contribute(client: PluginClientContext) {
-  client.addAgentPanel({ id: "devspace-diff", title: messages.message("codeReview"), icon: "FileDiff", locations: ["explorer", "workspace"], Component: DiffPanel });
+  client.addAgentPanel({ id: "devspace-diff", title: messages.message("panelTitle"), icon: "FileDiff", locations: ["explorer", "workspace"], Component: DiffPanel });
   client.addAgentPanel({ id: "devspace-cleanup", title: messages.message("cleanupTitle"), icon: "FolderMinus", locations: ["explorer", "workspace"], Component: CleanupPanel });
   client.addCommandCenterItem({ id: "cleanup-worktree", title: messages.message("cleanupTitle"), icon: "FolderMinus", keywords: ["DevSpace", "worktree", "cleanup", "archive"], context: "agent", onSelect: ({ openPanel }) => openPanel("devspace-cleanup", { location: "explorer" }) });
   client.addSlashCommand({ name: "devspace-cleanup", description: messages.message("cleanupTitle"), argumentHint: "", context: "agent", onSubmit: ({ openPanel }) => openPanel("devspace-cleanup", { location: "explorer" }) });
   client.addWorkspacePanel({ id: "devspace-cleanup-status", title: messages.message("cleanupStatusTitle"), icon: "FolderMinus", locations: ["explorer", "workspace"], Component: CleanupStatusPanel });
   client.addCommandCenterItem({ id: "cleanup-status", title: messages.message("cleanupStatusTitle"), icon: "FolderMinus", keywords: ["DevSpace", "worktree", "cleanup", "archive", "retry"], context: "workspace", onSelect: ({ openPanel }) => openPanel("devspace-cleanup-status", { location: "explorer" }) });
   // Existing file tabs restore into the same review surface after upgrading.
-  client.addAgentPanel({ id: "devspace-file-diff", title: messages.message("codeReview"), icon: "FileDiff", locations: ["explorer", "workspace"], Component: DiffPanel });
-  client.addCommandCenterItem({ id: "open-diff", title: messages.message("openReview"), icon: "FileDiff", keywords: ["DevSpace", "diff", "PR", "review"], context: "agent",
+  client.addAgentPanel({ id: "devspace-file-diff", title: messages.message("panelTitle"), icon: "FileDiff", locations: ["explorer", "workspace"], Component: DiffPanel });
+  client.addCommandCenterItem({ id: "open-diff", title: messages.message("openReview"), icon: "FileDiff", keywords: ["DevSpace", "wrap-up", "收尾", "diff", "PR", "review"], context: "agent",
     onSelect: ({ openPanel }) => openPanel("devspace-diff", { location: "explorer" }),
   });
   client.addSlashCommand({ name: "devspace-diff", description: messages.message("commandDescription"), argumentHint: "", context: "agent",

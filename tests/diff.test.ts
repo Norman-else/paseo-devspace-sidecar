@@ -12,7 +12,7 @@ import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { LocalDiff } from "../server/git.ts";
 import { remoteRequest, startBridge } from "../server/bridge.ts";
-import { diffLines, suggestedWorkspace, workspaceEmptyError, type Workspace } from "../shared/diff.ts";
+import { diffLines, isWorktree, sessionWorkspaces, suggestedWorkspace, workspaceEmptyError, type Workspace } from "../shared/diff.ts";
 import { reviewRows } from "../shared/review.ts";
 import { codeTokens } from "../shared/syntax.ts";
 import { en, zh } from "../shared/messages.ts";
@@ -219,7 +219,7 @@ test("agent binding ignores prose and other agents' guessed names; unified lines
   assert.equal(suggestedWorkspace([
     { type: "tool_call", name: "mcp__devspace__bash", input: { workspace_id: "ws_task" } },
     { type: "tool_call", name: "mcp__devspace__open_workspace", result: { workspace_id: "ws_removed" } },
-  ], workspaces), null, "never fall back to an older workspace when the latest one is gone");
+  ], workspaces), "ws_task", "a removed workspace is skipped");
   assert.equal(suggestedWorkspace([{ type: "tool_call", name: "unrelated_tool", result: { nested: { type: "tool_call", name: "mcp__devspace__bash", input: { workspace_id: "ws_task" } } } }], workspaces), null);
   const rows = diffLines("--- a/a\n+++ b/a\n@@ -5,2 +8,2 @@\n-old\n+new\n same\n");
   assert.deepEqual(rows[3], { kind: "remove", text: "-old", old: 5 });
@@ -294,15 +294,15 @@ test("Paseo's locale runtime updates labels, plural counts and persistent messag
     assert.equal(runtime.t(bundle, "taskChanges"), "Task changes");
     assert.equal(runtime.t(bundle, "files", { count: 1 }), "1 file");
     assert.equal(runtime.t(bundle, "files", { count: 22 }), "22 files");
-    assert.equal(runtime.resolve(persistentLabel), "View code changes and PR status");
+    assert.equal(runtime.resolve(persistentLabel), "Wrap up: view code changes, PR status and merge");
     locale = "zh-CN";
     for (const notify of listeners) notify();
     assert.equal(runtime.t(bundle, "taskChanges"), "任务改动");
     assert.equal(runtime.t(bundle, "files", { count: 22 }), "22 个文件");
-    assert.equal(runtime.resolve(persistentLabel), "查看代码改动与 PR 状态");
+    assert.equal(runtime.resolve(persistentLabel), "收尾：查看代码改动、PR 状态并合并");
     locale = "en";
     for (const notify of listeners) notify();
-    assert.equal(runtime.resolve(persistentLabel), "View code changes and PR status");
+    assert.equal(runtime.resolve(persistentLabel), "Wrap up: view code changes, PR status and merge");
   } finally { runtime.dispose(); }
 });
 
@@ -327,4 +327,20 @@ test("diff backgrounds are opaque and distinct across added/deleted lines and ho
   const addedLight = diffBackground("#3e704a", "#ffffff");
   assert.notEqual(addedLight, "#ffffff"); assert.notEqual(addedLight, added);
   assert.equal(diffBackground("unknown", "#222222"), "#222222");
+});
+
+test("binding prefers the session's latest worktree over later checkout use, and honours a pin", () => {
+  const ws = (id: string, root: string, mode = "checkout", worktree?: boolean) => ({ id, root, mode, worktree }) as Workspace;
+  const main = ws("ws_main", "/r/Navi"), devspace = ws("ws_ds", "/u/.devspace/worktrees/Navi-1", "worktree");
+  const claude = ws("ws_cl", "/r/Navi/.claude/worktrees/pr-29"), other = ws("ws_other", "/r/Other");
+  const call = (id: string) => ({ type: "tool_call", name: "mcp__devspace__bash", input: { workspace_id: id } });
+  const all = [main, devspace, claude, other];
+  assert.equal(suggestedWorkspace([call("ws_ds"), call("ws_main")], all), "ws_ds", "checkout after commit does not steal the review");
+  assert.equal(suggestedWorkspace([call("ws_ds"), call("ws_cl"), call("ws_main")], all), "ws_cl", "latest of several worktrees, including .claude/worktrees");
+  assert.equal(suggestedWorkspace([call("ws_main"), call("ws_other")], all), "ws_other", "no worktree: latest checkout");
+  assert.equal(suggestedWorkspace([call("ws_ds"), call("ws_cl")], all, "ws_ds"), "ws_ds", "pin wins");
+  assert.equal(suggestedWorkspace([call("ws_cl")], all, "ws_ds"), "ws_cl", "pin outside this session is ignored");
+  assert.deepEqual(sessionWorkspaces([call("ws_ds"), call("ws_main"), call("ws_ds")], all).map((w) => w.id), ["ws_ds", "ws_main"]);
+  assert.equal(isWorktree(ws("x", "/r/a", "checkout", true)), true, "git-detected linked worktree");
+  assert.equal(isWorktree(ws("x", "/u/.devspace/worktrees/a", "checkout", false)), false, "explicit server flag wins");
 });

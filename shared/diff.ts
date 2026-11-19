@@ -10,6 +10,9 @@ export const comparison = z.enum(["task", "uncommitted", "pr", "local"]);
 export const workspaceSchema = z.object({
   id: workspaceId, root: z.string(), sourceRoot: z.string().nullable(), mode: z.string(),
   baseSha: z.string().nullable(), branch: z.string().nullable(), lastUsedAt: z.string(),
+  // True for linked git worktrees (DevSpace `mode: worktree`, `.claude/worktrees/*`, or any checkout whose `.git` is a file).
+  // Optional so older remote sidecars without the field still parse.
+  worktree: z.boolean().optional(),
 });
 export type Workspace = z.infer<typeof workspaceSchema>;
 export const workspaceEmptyReason = z.enum(["not_git", "missing", "no_commits", "not_root"]);
@@ -46,8 +49,8 @@ export type ReviewFile = z.infer<typeof reviewFileSchema>;
 export const reviewSchema = z.object({ snapshot: snapshotSchema, files: z.array(reviewFileSchema) });
 export type Review = z.infer<typeof reviewSchema>;
 export const catalogRpc = defineRpc({
-  name: "diff.catalog", input: z.object({ agentId: z.string().min(1) }),
-  output: z.object({ workspace: workspaceSchema.nullable(), emptyReason: workspaceEmptyReason.optional(), inferenceError: z.string().optional(), cleanup: cleanupResultSchema.optional() }),
+  name: "diff.catalog", input: z.object({ agentId: z.string().min(1), pinnedWorkspaceId: workspaceId.optional() }),
+  output: z.object({ workspace: workspaceSchema.nullable(), candidates: z.array(workspaceSchema).default([]), pinned: z.boolean().default(false), emptyReason: workspaceEmptyReason.optional(), inferenceError: z.string().optional(), cleanup: cleanupResultSchema.optional() }),
 });
 export const snapshotRpc = defineRpc({
   name: "diff.snapshot", input: z.object({ workspaceId, comparison, ...reviewOptions }), output: snapshotSchema,
@@ -134,8 +137,27 @@ function workspaceFields(value: unknown): string[] {
   if (typeof target === "string" && /^ws_[a-zA-Z0-9_-]+$/.test(target)) return [target];
   return Object.values(object).flatMap(workspaceFields);
 }
-export function suggestedWorkspace(timeline: unknown, workspaces: Workspace[]): string | null {
-  const allowed = new Set(workspaces.map((w) => w.id));
-  const latest = devspaceWorkspaceIds(timeline).at(-1);
-  return latest && allowed.has(latest) ? latest : null;
+const worktreePath = /[\\/]\.(devspace|claude)[\\/]worktrees[\\/]/;
+export function isWorktree(workspace: Pick<Workspace, "root" | "mode" | "worktree">): boolean {
+  return workspace.worktree ?? (workspace.mode === "worktree" || worktreePath.test(workspace.root ?? ""));
+}
+/** Workspaces this session used through DevSpace, most recently used first, limited to ones that still exist. */
+export function sessionWorkspaces(timeline: unknown, workspaces: Workspace[]): Workspace[] {
+  const byId = new Map(workspaces.map((w) => [w.id, w]));
+  const seen = new Set<string>(), result: Workspace[] = [];
+  for (const id of devspaceWorkspaceIds(timeline).reverse()) {
+    const workspace = byId.get(id);
+    if (workspace && !seen.has(id)) { seen.add(id); result.push(workspace); }
+  }
+  return result;
+}
+/**
+ * The session's latest worktree wins over checkouts, so reading or writing the main checkout after
+ * committing in a worktree does not move the review away from the PR. Without any worktree, the
+ * latest checkout is used. A pinned workspace wins while the session still uses it.
+ */
+export function suggestedWorkspace(timeline: unknown, workspaces: Workspace[], pinned?: string): string | null {
+  const used = sessionWorkspaces(timeline, workspaces);
+  if (pinned && used.some((w) => w.id === pinned)) return pinned;
+  return (used.find(isWorktree) ?? used[0])?.id ?? null;
 }
