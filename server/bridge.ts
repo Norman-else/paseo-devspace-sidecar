@@ -45,7 +45,9 @@ export async function remoteRequest(config: RemoteSource & { mode?: "remote" }, 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(new URL("/rpc", url).toString(), {
+    // A bare origin is the sidecar bridge itself; an explicit path is the DevSpace adapter route.
+    const target = url.pathname === "/" ? new URL("/rpc", url) : url;
+    const response = await fetch(target.toString(), {
       method: "POST", redirect: "error", signal: controller.signal,
       headers: { Authorization: `Bearer ${config.token}`, "Content-Type": "application/json" }, body: JSON.stringify(input),
     });
@@ -54,7 +56,7 @@ export async function remoteRequest(config: RemoteSource & { mode?: "remote" }, 
     return value;
   } catch (error) {
     if (error instanceof TypeError || (error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name))) {
-      throw new Error("Cannot reach the project host's diff bridge. Check its Paseo plugin and private tunnel.");
+      throw new Error("Cannot reach the project host's diff bridge. Check its Paseo plugin and DevSpace connection.");
     }
     throw error;
   } finally { clearTimeout(timeout); }

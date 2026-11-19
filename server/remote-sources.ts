@@ -16,7 +16,7 @@ export class RemoteSources {
     const load = async () => {
       const results = await Promise.allSettled(this.sources.map(async (source) => ({ source, workspaces: z.array(workspaceSchema).parse(await remoteRequest(source, { op: "catalog" }, 4000)) })));
       const available = results.filter((result) => result.status === "fulfilled");
-      if (!available.length) throw new Error("Cannot reach the project host's diff bridge. Check its Paseo plugin and private tunnel.");
+      if (!available.length) throw new Error("Cannot reach the project host's diff bridge. Check its Paseo plugin and DevSpace connection.");
       const workspaces = new Map<string, Workspace>(), routes = new Map<string, RemoteSource>(), conflicts = new Set<string>();
       for (const result of available) {
         for (const workspace of result.value.workspaces) {

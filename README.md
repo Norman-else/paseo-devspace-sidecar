@@ -17,13 +17,15 @@ The Mac plugin starts an authenticated read service on `127.0.0.1:7677` and crea
 
 ## Connect the VPS
 
-From the Mac, using an existing noninteractive SSH config alias:
+The VPS reaches the Mac through DevSpace's existing connection (VPS `127.0.0.1:7676` → Mac DevSpace). The DevSpace lifecycle adapter adds an authenticated `/__paseo-devspace/rpc` route that forwards review requests to the Mac sidecar bridge on `127.0.0.1:7677`, so no separate tunnel is needed. Install the adapter first (`node scripts/install-devspace-lifecycle.mjs --install`; after adapter changes add `--reload`).
+
+From the Mac, using an existing noninteractive SSH config alias for the VPS:
 
 ```sh
-node scripts/connect-vps.mjs tokyo-claude
+node scripts/connect-vps.mjs claude-sidecar
 ```
 
-This copies source to `~/PersonalRepos/paseo-devspace-sidecar` on the VPS, configures remote mode without printing the token, and installs a Mac launch agent to maintain a private reverse SSH tunnel. VPS loopback port defaults to `17677`; an optional second argument changes it. Existing Paseo and DevSpace tunnels stay unchanged. Install the plugin at its VPS path with the remote Paseo CLI or Settings → Plugins. After source changes, rerun the script and reload the remote plugin.
+This copies source to `~/PersonalRepos/paseo-devspace-sidecar` on the VPS, configures remote mode with endpoint `http://127.0.0.1:7676/__paseo-devspace/rpc` without printing the token, and removes the legacy sidecar tunnel launch agent if present. An optional second argument changes the VPS DevSpace port. `--tunnel` restores the legacy dedicated reverse tunnel (VPS `127.0.0.1:17677` → Mac `7677`). Install the plugin at its VPS path with the remote Paseo CLI or Settings → Plugins. After source changes, rerun the script and reload the remote plugin.
 
 ## Using the panel
 

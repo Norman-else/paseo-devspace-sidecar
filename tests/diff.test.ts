@@ -192,6 +192,10 @@ test("bridge authenticates, rejects browser origins, proxies Git results and rep
     assert.equal((await fetch(endpoint + "/rpc", { method: "POST", headers: { Authorization: `Bearer ${token}`, Origin: "http://evil.invalid" }, body: "{}" })).status, 401);
     const catalog = await remoteRequest({ mode: "remote", endpoint, token }, { op: "catalog" }) as Workspace[];
     assert.equal(catalog[0].id, "ws_test");
+    // An endpoint with a path (the DevSpace adapter route) is requested as-is, not rewritten to /rpc.
+    const routed = await remoteRequest({ mode: "remote", endpoint: endpoint + "/rpc", token }, { op: "catalog" }) as Workspace[];
+    assert.equal(routed[0].id, "ws_test");
+    await assert.rejects(() => remoteRequest({ mode: "remote", endpoint: endpoint + "/__paseo-devspace/rpc", token }, { op: "catalog" }), /Not found/);
     const pr = await remoteRequest({ mode: "remote", endpoint, token }, { op: "pull-requests", workspaceId: "ws_test" }) as { status: string; reason: string };
     assert.equal(pr.status, "unavailable"); assert.equal(pr.reason, "no_remote");
     await assert.rejects(() => remoteRequest({ mode: "remote", endpoint: "https://example.com", token }, { op: "catalog" }), /loopback/);

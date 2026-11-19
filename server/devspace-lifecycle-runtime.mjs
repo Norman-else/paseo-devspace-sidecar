@@ -149,15 +149,33 @@ export function installDevspaceLifecycle(runtime) {
     if (config.mode !== 'local' || typeof config.token !== 'string' || config.token.length < 32) return;
     const engine = new DevspaceLifecycle(runtime, join(directory, 'cleanup-source'));
     const expected = createHash('sha256').update(`Bearer ${config.token}`).digest();
+    const authorized = (req) => {
+      const actual = createHash('sha256').update(req.headers.authorization ?? '').digest();
+      return !req.headers.origin && ['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress) && timingSafeEqual(expected, actual);
+    };
+    const body = async (req) => {
+      let input = req.body;
+      if (!input) { const chunks = []; let size = 0; for await (const chunk of req) { size += chunk.length; if (size > 16384) throw new Error('Request too large.'); chunks.push(chunk); } input = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+      if (JSON.stringify(input).length > 16384) throw new Error('Request too large.');
+      return input;
+    };
+    // Review RPCs ride DevSpace's existing connection to this host, so a VPS needs no separate tunnel.
+    runtime.app.post('/__paseo-devspace/rpc', async (req, res) => {
+      res.setHeader('Cache-Control', 'no-store');
+      if (!authorized(req)) return res.status(401).json({ error: 'Unauthorized.' });
+      let input;
+      try { input = await body(req); } catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : 'Invalid request.' }); }
+      try {
+        const upstream = await fetch(`http://127.0.0.1:${config.port}/rpc`, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(35000), headers: { Authorization: req.headers.authorization, 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+        res.status(upstream.status).set('Content-Type', 'application/json').send(Buffer.from(await upstream.arrayBuffer()));
+      } catch { res.status(502).json({ error: "The project host's Paseo sidecar plugin is not running." }); }
+    });
     runtime.app.post('/__paseo-devspace/cleanup', async (req, res) => {
       res.setHeader('Cache-Control', 'no-store');
-      const actual = createHash('sha256').update(req.headers.authorization ?? '').digest();
-      if (req.headers.origin || !['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress) || !timingSafeEqual(expected, actual)) return res.status(401).json({ error: 'Unauthorized.' });
+      if (!authorized(req)) return res.status(401).json({ error: 'Unauthorized.' });
       let input;
       try {
-        input = req.body;
-        if (!input) { const chunks = []; let size = 0; for await (const chunk of req) { size += chunk.length; if (size > 16384) throw new Error('Request too large.'); chunks.push(chunk); } input = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
-        if (JSON.stringify(input).length > 16384) throw new Error('Request too large.');
+        input = await body(req);
         if (!/^ws_[\w-]+$/.test(input.workspaceId ?? '')) throw new Error('Invalid workspace.');
         let value;
         if (input.op === 'cleanup-preview') value = await engine.preview(input.workspaceId);
