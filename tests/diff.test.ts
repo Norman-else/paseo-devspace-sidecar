@@ -294,15 +294,15 @@ test("Paseo's locale runtime updates labels, plural counts and persistent messag
     assert.equal(runtime.t(bundle, "taskChanges"), "Task changes");
     assert.equal(runtime.t(bundle, "files", { count: 1 }), "1 file");
     assert.equal(runtime.t(bundle, "files", { count: 22 }), "22 files");
-    assert.equal(runtime.resolve(persistentLabel), "Wrap up: view code changes, PR status and merge");
+    assert.equal(runtime.resolve(persistentLabel), "DevSpace Desk: code changes, PR status and merge");
     locale = "zh-CN";
     for (const notify of listeners) notify();
     assert.equal(runtime.t(bundle, "taskChanges"), "任务改动");
     assert.equal(runtime.t(bundle, "files", { count: 22 }), "22 个文件");
-    assert.equal(runtime.resolve(persistentLabel), "收尾：查看代码改动、PR 状态并合并");
+    assert.equal(runtime.resolve(persistentLabel), "DevSpace 工作台：代码改动、PR 状态与合并");
     locale = "en";
     for (const notify of listeners) notify();
-    assert.equal(runtime.resolve(persistentLabel), "Wrap up: view code changes, PR status and merge");
+    assert.equal(runtime.resolve(persistentLabel), "DevSpace Desk: code changes, PR status and merge");
   } finally { runtime.dispose(); }
 });
 

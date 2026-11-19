@@ -13,7 +13,7 @@ export default function contribute(client: PluginClientContext) {
   client.addCommandCenterItem({ id: "cleanup-status", title: messages.message("cleanupStatusTitle"), icon: "FolderMinus", keywords: ["DevSpace", "worktree", "cleanup", "archive", "retry"], context: "workspace", onSelect: ({ openPanel }) => openPanel("devspace-cleanup-status", { location: "explorer" }) });
   // Existing file tabs restore into the same review surface after upgrading.
   client.addAgentPanel({ id: "devspace-file-diff", title: messages.message("panelTitle"), icon: "FileDiff", locations: ["explorer", "workspace"], Component: DiffPanel });
-  client.addCommandCenterItem({ id: "open-diff", title: messages.message("openReview"), icon: "FileDiff", keywords: ["DevSpace", "wrap-up", "收尾", "diff", "PR", "review"], context: "agent",
+  client.addCommandCenterItem({ id: "open-diff", title: messages.message("openReview"), icon: "FileDiff", keywords: ["DevSpace", "desk", "工作台", "diff", "PR", "review"], context: "agent",
     onSelect: ({ openPanel }) => openPanel("devspace-diff", { location: "explorer" }),
   });
   client.addSlashCommand({ name: "devspace-diff", description: messages.message("commandDescription"), argumentHint: "", context: "agent",

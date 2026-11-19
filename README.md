@@ -29,9 +29,9 @@ This copies source to `~/PersonalRepos/paseo-devspace-sidecar` on the VPS, confi
 
 ## Using the panel
 
-Select the task's agent and click **Wrap-up** (**收尾** in Chinese) beside the composer, run `/devspace-diff`, or use Command Center → **Wrap up: view code changes, PR status and merge**. The composer button appears only after this session is associated with a DevSpace workspace. The panel opens in the right Explorer sidebar under **DevSpace Wrap-up**.
+Select the task's agent and click **Desk** (**工作台** in Chinese) beside the composer, run `/devspace-diff`, or use Command Center → **DevSpace Desk: code changes, PR status and merge**. The composer button appears only after this session is associated with a DevSpace workspace. The panel opens in the right Explorer sidebar under **DevSpace Desk**.
 
-The panel follows the most recently used worktree in the session, so later reads or writes in the main checkout do not move it away from the PR. Worktrees include DevSpace worktrees (`~/.devspace/worktrees/*`), Claude Code worktrees (`<project>/.claude/worktrees/*`) and any other linked Git worktree. Without a worktree, the latest checkout is used. When the session used more than one workspace, a **Workspace** selector above the panel lists them; picking one pins it for this panel, and **Auto** returns to the default. Existing commands and saved tabs remain compatible.
+The panel follows the most recently used worktree in the session, so later reads or writes in the main checkout do not move it away from the PR. Worktrees include DevSpace worktrees (`~/.devspace/worktrees/*`), Claude Code worktrees (`<project>/.claude/worktrees/*`) and any other linked Git worktree. Without a worktree, the latest checkout is used. When the session used more than one workspace, a workspace bar at the top of the panel shows the current branch, whether it is a worktree or the main checkout, and its path; open it to switch; picking one pins it for this panel, and **Auto** returns to the default. Existing commands and saved tabs remain compatible.
 
 The panel automatically binds to the latest explicit DevSpace workspace target in this agent's last 200 timeline entries. No workspace picker is shown. A conversation that has not used DevSpace gets an empty state explaining where changes appear. Ordinary assistant prose, project names, failed calls, and workspace IDs mentioned in command output do not select a worktree.
 
@@ -98,7 +98,7 @@ paseo plugin logs paseo-devspace-sidecar
 paseo plugin reload paseo-devspace-sidecar
 ```
 
-If the **Wrap-up** button never appears on the VPS, the sidecar cannot reach the Mac; the button is hidden rather than showing an error. Check in order:
+If the **Desk** button never appears on the VPS, the sidecar cannot reach the Mac; the button is hidden rather than showing an error. Check in order:
 
 1. The VPS `config.json` is `"mode": "remote"` with endpoint `http://127.0.0.1:7676/__paseo-devspace/rpc`. A `"mode": "local"` file on the VPS is the auto-generated default from installing the plugin; run `connect-vps.mjs` from the Mac.
 2. DevSpace is reachable from the VPS and runs the adapter. On the VPS, `curl -s -X POST http://127.0.0.1:7676/__paseo-devspace/rpc -H 'Authorization: Bearer x' -d '{}'` should return `{"error":"Unauthorized."}`; a different response means the adapter is not loaded (install it with `--install --reload`).
