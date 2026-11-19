@@ -14,7 +14,7 @@ When a PR exists, switch between its submitted changes and local changes not pre
 
 Click unmodified-line counts to expand and collapse code context, search loaded diff text, and navigate files from the flat index. File filters explain which changes are shown. Save a review baseline to compare later edits with reviewed text; the dialog identifies its comparison scope and saved time. Review baselines are private sidecar state, limited to 200 text files and 8 MiB, with a 512 KiB per-file limit. Omitted files are reported. Code selection uses draggable green + handles and a nearby floating action toolbar. Mobile layouts keep feedback available without a directory tree or a bottom operation bar.
 
-The project machine runs an authenticated sidecar service over a private SSH tunnel. Requires Paseo >=0.15.4 and DevSpace's SQLite workspace registry. Configuration is in `~/.config/paseo-devspace-sidecar/config.json` on each host.
+The project machine runs an authenticated sidecar service; a VPS reaches it through DevSpace's existing connection, with no separate tunnel. Requires Paseo >=0.15.4 and DevSpace's SQLite workspace registry. Configuration is in `~/.config/paseo-devspace-sidecar/config.json` on each host.
 
 Diff viewing uses read-only Git operations. Binary and oversized files show a notice. Local new-file previews are limited to 512 KiB, Git patches to 768 KiB, and file lists to 2,000 entries. The initial local review loads up to 80 patches and 4 MiB; other patches load when selected. Disconnected hosts report an error. Refreshing the same review source retains its displayed document while new data loads. This view shows current Git changes; it does not record every intermediate edit.
 

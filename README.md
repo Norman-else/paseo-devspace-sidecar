@@ -71,14 +71,14 @@ Only active DevSpace-managed linked worktrees inside its configured worktree dir
 
 Tracked changes, untracked files, locks and ignored files outside known disposable build/dependency directories block deletion. There is no force-delete or automatic stash option. Local branches remain, and a `refs/paseo-devspace-sidecar/recovery/<workspace-id>` reference preserves the selected HEAD, including detached HEADs. Unmerged or unknown PR states require an extra acknowledgement; extra commits beyond a merged PR block cleanup. The source rechecks HEAD, registration and activity after confirmation. Uncertain outcomes are queried without automatically repeating deletion.
 
-Cleanup requires the lifecycle adapter inside **DevSpace 1.1.1** on the project host. It adds a token-authenticated loopback endpoint to the existing DevSpace service, using the sidecar's private token. It does not patch the installed npm package. Normal review does not require this adapter. For the existing Mac LaunchAgent:
+Cleanup requires the lifecycle adapter inside **DevSpace 1.1.1** on the project host. It adds a token-authenticated loopback endpoint to the existing DevSpace service, using the sidecar's private token. It does not patch the installed npm package. The same adapter also carries review requests from a VPS (`/__paseo-devspace/rpc`), so a VPS needs it for normal review too; review on the Mac itself does not. For the existing Mac LaunchAgent:
 
 ```sh
 node scripts/install-devspace-lifecycle.mjs              # check compatibility and idle state
 node scripts/install-devspace-lifecycle.mjs --install    # enable, with a LaunchAgent backup
 ```
 
-After changing adapter code, use `--install --reload` while DevSpace is idle. The installer gracefully reloads DevSpace only; Paseo and SSH tunnels are unchanged. Other service managers can start Node with `--import /absolute/plugin/path/server/devspace-lifecycle-preload.mjs` before the DevSpace entry script. Unsupported DevSpace versions disable the adapter. Windows setup remains deferred; the automatic installer is specific to the configured Mac LaunchAgent.
+After changing adapter code, use `--install --reload` while DevSpace is idle. The installer gracefully reloads DevSpace only; Paseo and SSH tunnels are unchanged. The installer refuses to run while DevSpace has child processes, including a command started through DevSpace itself; launch it detached (for example `nohup sh -c 'sleep 5; node scripts/install-devspace-lifecycle.mjs --install --reload' &`) when working over DevSpace. Other service managers can start Node with `--import /absolute/plugin/path/server/devspace-lifecycle-preload.mjs` before the DevSpace entry script. Unsupported DevSpace versions disable the adapter. Windows setup remains deferred; the automatic installer is specific to the configured Mac LaunchAgent.
 
 Source plans and cleanup receipts live under the sidecar configuration directory in `cleanup-source/`; daemon association/archive receipts are in `cleanup-jobs.json`, and remote source pins in `cleanup-routes.json`. Keep them private and retain them for recovery. The source extension updates its own DevSpace registration to inactive after acquiring the cleanup lease. It deliberately avoids the pruned state, which DevSpace can automatically restore. Restart recovery verifies an inactive registration, missing directory/registration and matching recovery reference before reporting success.
 
@@ -96,6 +96,14 @@ paseo plugin logs paseo-devspace-sidecar
 paseo plugin reload paseo-devspace-sidecar
 ```
 
-The Mac tunnel uses `~/Library/LaunchAgents/com.normanzuo.paseo-devspace-sidecar.plist`; SSH errors are in `~/.config/paseo-devspace-sidecar/tunnel.log`. To remove the integration, uninstall the plugin on both hosts and unload that launch agent. Source and configuration remain for you to keep or delete.
+If the **Review** button never appears on the VPS, the sidecar cannot reach the Mac; the button is hidden rather than showing an error. Check in order:
+
+1. The VPS `config.json` is `"mode": "remote"` with endpoint `http://127.0.0.1:7676/__paseo-devspace/rpc`. A `"mode": "local"` file on the VPS is the auto-generated default from installing the plugin; run `connect-vps.mjs` from the Mac.
+2. DevSpace is reachable from the VPS and runs the adapter. On the VPS, `curl -s -X POST http://127.0.0.1:7676/__paseo-devspace/rpc -H 'Authorization: Bearer x' -d '{}'` should return `{"error":"Unauthorized."}`; a different response means the adapter is not loaded (install it with `--install --reload`).
+3. The Paseo app and this plugin are running on the Mac: it serves `127.0.0.1:7677`, which the adapter forwards to. Otherwise review reports that the project host's sidecar plugin is not running.
+
+With the legacy `--tunnel` setup, the Mac tunnel uses `~/Library/LaunchAgents/com.normanzuo.paseo-devspace-sidecar.plist` and SSH errors are in `~/.config/paseo-devspace-sidecar/tunnel.log`; its SSH alias must still resolve. Rerunning `connect-vps.mjs` without `--tunnel` removes that launch agent.
+
+To remove the integration, uninstall the plugin on both hosts and unload any legacy tunnel launch agent. Source and configuration remain for you to keep or delete.
 
 Paseo 0.15.x's public plugin theme exposes colors but no typography. The isolated `client/web.ts` adapter reads only `monoFontFamily` and `codeFontSize` from the client's saved appearance settings and never writes them. Unsupported storage formats fall back to the platform monospace stack and 14px. Code rows opt out of Paseo's interface-font CSS override; native mobile clients currently use their platform monospace fallback. File names in section headers and the file index share the same 12px interface typography, 18px line height, medium weight, and 10px change counts.
