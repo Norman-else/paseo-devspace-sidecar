@@ -3,6 +3,7 @@ import { defineRpc } from "@getpaseo/plugin";
 import { z } from "zod";
 import { mergeOptionsSchema, mergeOutcomeSchema, mergeRequestFields } from "./pr-merge";
 import { pullRequestResultSchema } from "./pull-request";
+import { gitStatusSchema } from "./git-actions";
 import { reviewOptions, discussionSchema, checkDetailSchema, contextSchema, checkpointSchema } from "./review-details";
 
 export const workspaceId = z.string().regex(/^ws_[a-zA-Z0-9_-]+$/);
@@ -59,6 +60,7 @@ export const fileRpc = defineRpc({
   name: "diff.file", input: z.object({ workspaceId, comparison, path: z.string().min(1), ...reviewOptions }), output: fileResultSchema,
 });
 export const reviewRpc = defineRpc({ name: "diff.review", input: z.object({ workspaceId, comparison, ...reviewOptions }), output: reviewSchema });
+export const gitStatusRpc = defineRpc({ name: "git.status", input: z.object({ workspaceId }), output: gitStatusSchema });
 export const pullRequestRpc = defineRpc({ name: "github.pull-requests", input: z.object({ workspaceId }), output: pullRequestResultSchema });
 export const mergeOptionsRpc = defineRpc({ name: "github.merge-options", input: z.object({ workspaceId, prNumber: z.number().int().positive() }), output: mergeOptionsSchema });
 export const mergePrRpc = defineRpc({ name: "github.merge-pr", input: z.object({ workspaceId, prNumber: z.number().int().positive(), ...mergeRequestFields }), output: mergeOutcomeSchema });
@@ -75,6 +77,7 @@ export const bridgeRequest = z.discriminatedUnion("op", [
   z.object({ op: z.literal("snapshot"), workspaceId, comparison, ...reviewOptions }),
   z.object({ op: z.literal("review"), workspaceId, comparison, ...reviewOptions }),
   z.object({ op: z.literal("pull-requests"), workspaceId }),
+  z.object({ op: z.literal("git-status"), workspaceId }),
   z.object({ op: z.literal("file"), workspaceId, comparison, path: z.string().min(1), ...reviewOptions }),
   mergeOptionsRpc.input.extend({ op: z.literal("merge-options") }),
   mergePrRpc.input.extend({ op: z.literal("merge-pr") }),

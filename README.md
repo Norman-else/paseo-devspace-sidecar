@@ -63,6 +63,24 @@ Check details show provider summaries and GitHub check annotations. Failed GitHu
 
 PR status requires `gh` (GitHub CLI) installed and authenticated on the project host that runs the local sidecar bridge. No GitHub credentials are sent to the VPS or stored in this repository. Lookups use the branch's push/tracking remote and support GitHub forks by matching the head repository owner as well as the branch name. Multiple open PRs for that branch are shown; otherwise the most recently updated matching merged/closed PR is shown. Missing PRs, unavailable authentication, and failed requests are separate states. Check results refer to the PR's last pushed commit, not uncommitted local edits. GitHub reads remain read-only. The explicit merge action is the exception: for Open PRs, the split-button menu selects an allowed merge method and an independent Bypass requirements toggle, while only clicking the main button sends a merge request. Bypass is available only when GitHub reports the authenticated actor can use it. The project host revalidates workspace/PR association, repository, base branch, method, permission, and expected head SHA immediately before an asynchronous GitHub merge request. It never silently retries a write after an uncertain network result; subsequent polling is read-only. Method selection and refresh never merge. Merge queues and stacked PRs direct users to GitHub; authorized Bypass can directly merge a non-stacked PR. The plugin does not create or approve PRs, resolve threads, post GitHub comments, or deploy changes. Agent feedback is sent only through the feedback composer's explicit Send action.
 
+## Commit, push and create a PR
+
+When the workspace has work that is not on GitHub yet, an action bar under the header shows what is pending (uncommitted files, unpushed commits, no PR yet) and offers the next step as a split button:
+
+| State | Main action | Other choices |
+| --- | --- | --- |
+| Uncommitted changes, no open PR | Commit & create PR | Commit, Commit & push |
+| Uncommitted changes, open PR | Commit & push | Commit |
+| Commits not pushed, no open PR | Push & create PR | Push |
+| Commits not pushed, open PR | Push | |
+| Pushed, ahead of the base branch, no PR | Create PR | |
+| Work on the default branch or a detached HEAD | New branch & create PR | New branch & commit |
+| Merge conflicts | none; the bar asks to resolve them first | |
+
+PR creation is offered only when GitHub reports no open PR for the branch, and push only when the branch has a remote. Nothing is offered once everything is committed, pushed and has a PR.
+
+Choosing an action opens a confirmation with editable instructions and the full prompt, then sends it to the session's agent. The agent runs the Git and `gh` commands through DevSpace with the bound `workspace_id`, writes the commit message and PR description itself from the diff and the conversation, follows the repository's conventions and PR template, never pushes to the base branch, and does not merge or force-push. Buttons are disabled while the agent is running; Git and PR status refresh when its turn ends. Reading Git status is read-only; the sidecar itself never commits or pushes.
+
 ## Clean up finished worktrees
 
 A merged PR shows **Clean up worktree** beside its status. You can also open **More review actions → Clean up worktree**, use Command Center, or run `/devspace-cleanup`, including when the branch has no PR.

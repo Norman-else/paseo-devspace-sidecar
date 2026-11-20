@@ -24,6 +24,8 @@ import { ReviewToolbar } from "./review-toolbar";
 import { useStickyFileHeader } from "./use-sticky-file-header";
 import { Discussions, InlineDiscussion } from "./review-discussions";
 import { FeedbackComposer, type FeedbackDraft } from "./feedback-composer";
+import { GitActionsBar } from "./git-actions-bar";
+import type { PrPresence } from "../shared/git-actions";
 import { ReviewOptions } from "./review-options";
 import { clearNativeCodeSelection, installSelectionCursor, watchCodeSelection, stableScrollbarStyle } from "./web";
 import { ReviewTabs } from "./review-tabs";
@@ -66,6 +68,8 @@ export function DiffPanel({ theme, host, params, tab, cleanupInitiallyOpen = fal
   const emptyReason = rejectedReason ?? catalog.data?.emptyReason;
   const pullRequests = useQuery({ queryKey: ["devspace-pull-requests-v2", host.id, bound?.id, bound?.branch], queryFn: () => prCall({ workspaceId: bound!.id }), enabled: !!bound, refetchInterval: 30000, staleTime: 10000, retry: false });
   const currentPrResult = branchPullRequests(pullRequests.data, bound?.branch);
+  const openPrs = currentPrResult?.status === "available" ? currentPrResult.pullRequests.filter((item) => item.state === "OPEN" || item.state === "DRAFT") : [];
+  const prPresence: PrPresence = pullRequests.isPending || pullRequests.error || !currentPrResult ? "unknown" : currentPrResult.status === "none" || currentPrResult.status === "available" && !openPrs.length ? "none" : openPrs.length ? "open" : "unknown";
   const result = currentPrResult?.status === "available" ? currentPrResult : null;
   const pr = result?.pullRequests.find((pr) => pr.number === state.prNumber) ?? result?.pullRequests[0];
   const view = pr ? state.view : "changes";
@@ -266,6 +270,7 @@ export function DiffPanel({ theme, host, params, tab, cleanupInitiallyOpen = fal
     {pr && header.mode === "pull-request" ? <PullRequestStatus result={currentPrResult} loading={false} error={null} colors={colors} compact={!wide} selectedNumber={pr.number} onSelect={(prNumber) => save({ ...state, prNumber, filter: "all", scope: "", reviewed: {}, collapsed: [] })} workspaceId={bound?.id} maxChecksHeight={size.height} maxChecksWidth={size.width - 24} onCheckFeedback={checkFeedback} hostId={host.id} onPrUpdated={refresh} onCleanup={bound?.mode === "worktree" ? () => setCleanupOpen(true) : undefined} mergeReady={comparison !== "pr" || document.data?.snapshot.headSha === pr.headSha} />
       : <View style={{ paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 8 }}><Icon name={bound ? "GitBranch" : "FileDiff"} size={14} color={colors.foregroundMuted} /><Text style={{ color: colors.foreground, fontSize: 12, fontWeight: "600", flex: 1 }} numberOfLines={1}>{bound?.branch ?? t("codeReview")}</Text>{!bound ? actions : null}</View>}
     {header.showPrNotice ? <PullRequestStatus result={currentPrResult} loading={pullRequests.isPending} error={pullRequests.error} colors={colors} compact={!wide} /> : null}
+    {bound ? <GitActionsBar workspace={bound} agentId={params.agentId} pr={prPresence} openPr={openPrs[0]?.number} revision={snapshot.data?.revision} colors={colors} compact={!wide} hostId={host.id} onDraft={setDraft} onAgentFinished={refresh} /> : null}
     {pr ? <ReviewTabs view={view} count={discussions.data?.threads.length} compact={!wide} colors={colors} onChange={changeView} canNavigate={currentThreads.length > 0} onNavigate={(direction) => { const thread = nextDiscussion(currentThreads, currentThreadId, direction); if (thread) jumpThread(thread); }} /> : null}
     {pr && bound && view === "comments" ? <View style={{ flex: 1, minHeight: 0 }}>
       {discussions.isPending ? <ActivityIndicator color={colors.foregroundMuted} style={{ margin: 20 }} /> : discussions.error ? <Pressable accessibilityRole="button" onPress={() => void discussions.refetch()} style={{ padding: 16 }}><Text style={{ color: colors.statusDanger, fontSize: 13 }}>{t("prUnavailable")} · {t("retry")}</Text></Pressable> : <Discussions threads={discussions.data?.threads ?? []} resolved={showResolved} onResolved={setShowResolved} onJump={jumpThread} onFeedback={threadFeedback} colors={colors} inlineAvailable={!!inlineAvailable} truncated={!!discussions.data?.truncated} />}

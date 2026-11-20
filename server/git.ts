@@ -25,6 +25,29 @@ export async function git(root: string, args: string[], maxBuffer = 8 * 1024 * 1
     timeout: 15000, maxBuffer, encoding: "utf8", env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
   })).stdout;
 }
+/** The remote a branch pushes to: its push settings first, then origin, then the only remote. */
+async function pushRemote(root: string, branch: string | null): Promise<string | null> {
+  const names = (await git(root, ["remote"])).trim().split(/\r?\n/).filter(Boolean);
+  const keys = branch ? [`branch.${branch}.pushRemote`, "remote.pushDefault", `branch.${branch}.remote`] : ["remote.pushDefault"];
+  const preferences = await Promise.all(keys.map(async (key) => (await git(root, ["config", "--get", key]).catch(() => "")).trim()));
+  return preferences.find((name) => names.includes(name)) ?? (names.includes("origin") ? "origin" : names.length === 1 ? names[0] : null);
+}
+/** Parse `git status --porcelain=v2 --branch -z`. Renames carry an extra NUL-separated original path. */
+export function parsePorcelainStatus(raw: string) {
+  const tokens = raw.split("\0");
+  let branch: string | null = null, upstream: string | null = null, ahead = 0, behind = 0, tracked = false, changed = 0, conflicted = 0;
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index];
+    if (token.startsWith("# branch.head ")) { const head = token.slice(14); branch = head === "(detached)" ? null : head; }
+    else if (token.startsWith("# branch.upstream ")) upstream = token.slice(18);
+    else if (token.startsWith("# branch.ab ")) { const match = /\+(\d+) -(\d+)/.exec(token); if (match) { ahead = Number(match[1]); behind = Number(match[2]); tracked = true; } }
+    else if (token.startsWith("1 ") || token.startsWith("? ")) changed++;
+    else if (token.startsWith("2 ")) { changed++; index++; }
+    else if (token.startsWith("u ")) { changed++; conflicted++; }
+  }
+  // An upstream without ahead/behind counts no longer exists on the remote (for example after a merged PR deleted it).
+  return { branch, upstream: tracked ? upstream : null, ahead: tracked ? ahead : 0, behind: tracked ? behind : 0, changed, conflicted };
+}
 type StoredWorkspace = { id: string; root: string; source_root: string | null; mode: string; base_sha: string | null; last_used_at: string };
 export class LocalDiff {
   private reviews = new Map<string, { revision: string; promise: Promise<Review> }>();
@@ -111,9 +134,7 @@ export class LocalDiff {
     const { workspace, root } = context ?? await this.workspace(id);
     if (!workspace.branch) return this.github.unavailable("detached_head");
     try {
-      const names = (await git(root, ["remote"])).trim().split(/\r?\n/).filter(Boolean);
-      const preferences = await Promise.all([`branch.${workspace.branch}.pushRemote`, "remote.pushDefault", `branch.${workspace.branch}.remote`].map(async (key) => (await git(root, ["config", "--get", key]).catch(() => "")).trim()));
-      const remoteName = preferences.find((name) => names.includes(name)) ?? (names.includes("origin") ? "origin" : names.length === 1 ? names[0] : null);
+      const remoteName = await pushRemote(root, workspace.branch);
       if (!remoteName) return this.github.unavailable("no_remote");
       const [remote, localHeadSha] = await Promise.all([git(root, ["remote", "get-url", "--push", "--", remoteName]), git(root, ["rev-parse", "HEAD"])]);
       return this.github.read({ root, branch: workspace.branch, mode: workspace.mode, remote: remote.trim(), localHeadSha: localHeadSha.trim() });
@@ -350,6 +371,21 @@ export class LocalDiff {
     if (value.status === "merged" || value.status === "failed") this.pullCache.clear();
     return value;
   }
+  async gitStatus(id: string) {
+    const { root } = await this.workspace(id);
+    const local = parsePorcelainStatus(await git(root, ["status", "--porcelain=v2", "--branch", "--untracked-files=all", "-z"]));
+    const remote = await pushRemote(root, local.branch).catch(() => null);
+    let defaultBranch: string | null = null, aheadOfBase = 0;
+    if (remote) {
+      const head = (await git(root, ["symbolic-ref", "--quiet", "--short", `refs/remotes/${remote}/HEAD`]).catch(() => "")).trim();
+      if (head.startsWith(`${remote}/`)) defaultBranch = head.slice(remote.length + 1);
+      else for (const name of ["main", "master"]) {
+        if (await git(root, ["rev-parse", "--verify", "--quiet", `refs/remotes/${remote}/${name}`]).then(() => true, () => false)) { defaultBranch = name; break; }
+      }
+      if (defaultBranch) aheadOfBase = Number((await git(root, ["rev-list", "--count", `refs/remotes/${remote}/${defaultBranch}..HEAD`]).catch(() => "0")).trim()) || 0;
+    }
+    return { ...local, remote, defaultBranch, aheadOfBase };
+  }
   dispatch(input: BridgeRequest): Promise<unknown> {
     if (input.op === "cleanup-preview" || input.op === "cleanup-execute" || input.op === "cleanup-status") { if (!this.cleanup) throw new Error("DevSpace lifecycle adapter is unavailable."); return this.cleanup(input); }
     if (input.op === "catalog") return this.catalog();
@@ -357,6 +393,7 @@ export class LocalDiff {
     if (input.op === "snapshot") return this.snapshot(input.workspaceId, input.comparison, input);
     if (input.op === "review") return this.review(input.workspaceId, input.comparison, input);
     if (input.op === "pull-requests") return this.pullRequests(input.workspaceId);
+    if (input.op === "git-status") return this.gitStatus(input.workspaceId);
     if (input.op === "merge-options") return this.mergeOptions(input.workspaceId, input.prNumber);
     if (input.op === "merge-pr") return this.mergePr(input);
     if (input.op === "merge-status") return this.mergeStatus(input.workspaceId, input.prNumber, input.requestId);

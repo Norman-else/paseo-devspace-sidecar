@@ -3,7 +3,8 @@ import { cleanupRequest } from "./server/cleanup-client";
 import { cleanupPreviewRpc, cleanupExecuteRpc, cleanupStatusRpc, cleanupReceiptRpc } from "./shared/cleanup";
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { z } from "zod";
-import { catalogRpc, devspaceWorkspaceIds, fileRpc, fileResultSchema, pullRequestRpc, reviewRpc, reviewSchema, snapshotRpc, snapshotSchema, sessionWorkspaces, suggestedWorkspace, workspaceSchema, workspaceInspectionSchema, type BridgeRequest } from "./shared/diff";
+import { gitStatusSchema } from "./shared/git-actions";
+import { catalogRpc, gitStatusRpc, devspaceWorkspaceIds, fileRpc, fileResultSchema, pullRequestRpc, reviewRpc, reviewSchema, snapshotRpc, snapshotSchema, sessionWorkspaces, suggestedWorkspace, workspaceSchema, workspaceInspectionSchema, type BridgeRequest } from "./shared/diff";
 import { pullRequestResultSchema } from "./shared/pull-request";
 import { loadConfig, configDirectory } from "./server/config";
 import { join } from "node:path";
@@ -52,6 +53,7 @@ export default function contribute(server: PluginServerContext) {
   server.handle(snapshotRpc, async (input) => snapshotSchema.parse(await (await ready).request({ op: "snapshot", ...input })));
   server.handle(fileRpc, async (input) => fileResultSchema.parse(await (await ready).request({ op: "file", ...input })));
   server.handle(reviewRpc, async (input) => reviewSchema.parse(await (await ready).request({ op: "review", ...input })));
+  server.handle(gitStatusRpc, async (input) => gitStatusSchema.parse(await (await ready).request({ op: "git-status", ...input })));
   server.handle(pullRequestRpc, async (input) => pullRequestResultSchema.parse(await (await ready).request({ op: "pull-requests", ...input })));
   server.handle(mergeOptionsRpc, async (input) => mergeOptionsRpc.output.parse(await (await ready).request({ op: "merge-options", ...input })));
   server.handle(mergePrRpc, async (input) => mergePrRpc.output.parse(await (await ready).request({ op: "merge-pr", ...input })));

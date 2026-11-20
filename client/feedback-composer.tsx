@@ -12,7 +12,7 @@ type Attachment = {
   path?: string; location?: string; source: string; revision?: string; capturedAt?: string;
   preview: { kind: "code"; lines: { number: number; text: string }[] } | { kind: "markdown" | "text"; text: string };
 };
-export type FeedbackDraft = { title: string; context: string; instruction: string; intent?: "explain" | "change"; attachment?: Attachment };
+export type FeedbackDraft = { title: string; context: string; instruction: string; intent?: "explain" | "change" | "git"; attachment?: Attachment };
 export function FeedbackComposer({ draft, agentId, colors, onClose }: { draft: FeedbackDraft | null; agentId: string; colors: Colors; onClose(): void }) {
   const { t, locale } = useMessages(), paseo = usePaseo(), toast = useToast();
   const [instruction, setInstruction] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState(false), [expanded, setExpanded] = useState(false);
@@ -21,14 +21,14 @@ export function FeedbackComposer({ draft, agentId, colors, onClose }: { draft: F
   const attachment = draft?.attachment;
   const path = attachment?.path, slash = path?.lastIndexOf("/") ?? -1;
   const filename = path?.slice(slash + 1) ?? draft?.title;
-  const previewLabel = attachment?.preview.kind === "code" ? t("attachedCode", { count: attachment.preview.lines.length }) : t("attachedContext");
+  const previewLabel = draft?.intent === "git" ? t("gitPromptDetails") : attachment?.preview.kind === "code" ? t("attachedCode", { count: attachment.preview.lines.length }) : t("attachedContext");
   const send = async () => {
     if (!instruction.trim() || busy) return;
     setBusy(true); setError(false);
     try { await paseo.agents.ref(agentId).send(message); toast.show(t("sentToAgent")); onClose(); }
     catch { setError(true); } finally { setBusy(false); }
   };
-  return <Modal open={!!draft} onOpenChange={(open) => { if (!open && !busy) onClose(); }} title={t(draft?.intent === "change" ? "requestChange" : draft?.intent === "explain" ? "explainCode" : "feedbackDraft")}>
+  return <Modal open={!!draft} onOpenChange={(open) => { if (!open && !busy) onClose(); }} title={draft?.intent === "git" ? t("panelTitle") : t(draft?.intent === "change" ? "requestChange" : draft?.intent === "explain" ? "explainCode" : "feedbackDraft")}>
     <Modal.Content contentContainerStyle={{ padding: 0, gap: 0 }}>
       <View style={{ padding: 20, paddingBottom: 16, gap: 16 }}>
         <View style={{ gap: 6 }}>
@@ -40,7 +40,7 @@ export function FeedbackComposer({ draft, agentId, colors, onClose }: { draft: F
           </View> : null}
         </View>
         <View style={{ gap: 8 }}>
-          <Text style={{ color: colors.foreground, fontSize: 13, fontWeight: "500" }}>{t(draft?.intent === "change" ? "changeFeedbackLabel" : "feedbackMessageLabel")}</Text>
+          <Text style={{ color: colors.foreground, fontSize: 13, fontWeight: "500" }}>{t(draft?.intent === "change" ? "changeFeedbackLabel" : draft?.intent === "git" ? "gitNoteLabel" : "feedbackMessageLabel")}</Text>
           <TextInput multiline editable={!busy} value={instruction} onChangeText={(value) => { setInstruction(value); if (error) setError(false); }} placeholderTextColor={colors.foregroundMuted} placeholder={t("feedbackInstructions")} accessibilityLabel={t(draft?.intent === "change" ? "changeFeedbackLabel" : "feedbackMessageLabel")} style={{ minHeight: 132, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 8, backgroundColor: colors.surface0, color: colors.foreground, fontSize: 15, lineHeight: 23, textAlignVertical: "top" }} />
         </View>
         <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, overflow: "hidden" }}>
@@ -54,7 +54,7 @@ export function FeedbackComposer({ draft, agentId, colors, onClose }: { draft: F
         {error ? <Text accessibilityRole="alert" style={{ color: colors.statusDanger, fontSize: 13, lineHeight: 20 }}>{t("feedbackError")}</Text> : null}
       </View>
       <View style={{ padding: 16, paddingHorizontal: 20, borderTopWidth: 1, borderColor: colors.border, gap: 12 }}>
-        <Text style={{ color: colors.foregroundMuted, fontSize: 12, lineHeight: 18 }}>{t("feedbackAttachmentHint")}</Text>
+        <Text style={{ color: colors.foregroundMuted, fontSize: 12, lineHeight: 18 }}>{t(draft?.intent === "git" ? "gitSendHint" : "feedbackAttachmentHint")}</Text>
         <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>
           <FeedbackButton label={t("copyFeedback")} icon="Copy" disabled={busy || !instruction.trim()} colors={colors} onPress={() => { void copyText(message).then(() => toast.show(t("copiedFeedback"))).catch(() => toast.error(t("feedbackError"))); }} />
           <FeedbackButton label={t(busy ? "sendingFeedback" : "sendToAgent")} primary busy={busy} disabled={busy || !instruction.trim()} colors={colors} onPress={() => void send()} />
