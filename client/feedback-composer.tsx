@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { Spinner } from "./spinner";
 import { usePaseo } from "@getpaseo/plugin/client";
 import { Icon, Markdown, Modal, TextInput, copyText, useToast } from "@getpaseo/plugin/client/ui";
 import type { Colors } from "./review-ui";
@@ -90,6 +91,6 @@ function FeedbackButton({ label, icon, primary, busy, disabled, colors, onPress 
   const [hover, setHover] = useState(false);
   const foreground = primary ? colors.accentForeground : colors.foreground;
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled, busy }} disabled={disabled} onPress={onPress} onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)} style={({ pressed }) => ({ minHeight: 44, flexShrink: 1, paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderColor: primary ? colors.accent : hover ? colors.foregroundMuted : colors.border, backgroundColor: primary ? colors.accent : hover || pressed ? colors.surface2 : "transparent", borderRadius: 6, opacity: disabled ? 0.45 : pressed ? 0.75 : 1 })}>
-    {busy ? <ActivityIndicator size="small" color={foreground} /> : icon ? <Icon name={icon} size={15} color={foreground} /> : null}<Text style={{ color: foreground, fontSize: 14, lineHeight: 20, fontWeight: primary ? "600" : "400", flexShrink: 1, textAlign: "center" }}>{label}</Text>
+    {busy ? <Spinner size={15} color={foreground} /> : icon ? <Icon name={icon} size={15} color={foreground} /> : null}<Text style={{ color: foreground, fontSize: 14, lineHeight: 20, fontWeight: primary ? "600" : "400", flexShrink: 1, textAlign: "center" }}>{label}</Text>
   </Pressable>;
 }

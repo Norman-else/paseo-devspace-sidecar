@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { Spinner } from "./spinner";
 import { Modal } from "@getpaseo/plugin/client/ui";
 import type { Colors } from "./review-ui";
 import { useMessages } from "./messages";
@@ -40,6 +41,6 @@ function SaveBaselineButton({ busy, colors, label, onPress }: { busy: boolean; c
   const [hover, setHover] = useState(false);
   return <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={busy} onPress={onPress} onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)}
     style={({ pressed }) => ({ minHeight: 44, paddingHorizontal: 12, paddingVertical: 10, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 8, borderWidth: 1, borderColor: hover || pressed ? colors.foregroundMuted : colors.border, borderRadius: 6, backgroundColor: colors.surface2, opacity: busy || pressed ? 0.65 : 1 })}>
-    {busy ? <ActivityIndicator size="small" color={colors.foregroundMuted} /> : null}<Text style={{ color: colors.foreground, fontSize: 13, lineHeight: 18, fontWeight: "500", flexShrink: 1, textAlign: "center" }}>{label}</Text>
+    {busy ? <Spinner size={14} color={colors.foregroundMuted} /> : null}<Text style={{ color: colors.foreground, fontSize: 13, lineHeight: 18, fontWeight: "500", flexShrink: 1, textAlign: "center" }}>{label}</Text>
   </Pressable>;
 }

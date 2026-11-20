@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { Spinner } from "./spinner";
 import { useQuery } from "@tanstack/react-query";
 import { useRpc } from "@getpaseo/plugin/client";
 import { Icon, useToast } from "@getpaseo/plugin/client/ui";
@@ -52,7 +53,7 @@ export function MergePrAction({ workspaceId, repository, number, headSha, baseBr
   return <View testID="devspace-merge-action" style={{ flexDirection: "row", alignItems: "center", minWidth: 0, maxWidth: compact ? 190 : 300, zIndex: 20 }}>
     <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityHint={t(reasons[reason])} accessibilityState={{ disabled, busy: busy || pending }} disabled={disabled} onPress={() => void submit()} style={{ minHeight: compact ? 44 : 28, flexShrink: 1, justifyContent: "center" }}>
       {({ pressed }) => <View style={{ height: compact ? 32 : 28, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 10, borderWidth: 1, borderRightWidth: 0, borderColor: disabled || uncertain ? colors.border : tone, borderTopLeftRadius: 4, borderBottomLeftRadius: 4, backgroundColor: background, opacity: pressed ? 0.75 : 1 }}>
-        {busy || pending ? <ActivityIndicator size="small" color={foreground} /> : null}<Text numberOfLines={1} style={{ flexShrink: 1, color: foreground, fontSize: 11, lineHeight: 16, fontWeight: "600" }}>{label}</Text>
+        {busy || pending ? <Spinner size={12} color={foreground} /> : null}<Text numberOfLines={1} style={{ flexShrink: 1, color: foreground, fontSize: 11, lineHeight: 16, fontWeight: "600" }}>{label}</Text>
       </View>}
     </Pressable>
     <ReviewMenu title={t("mergeOptions")} colors={colors} touch={compact} align="right" width={340} trigger={({ open, toggle }) => <Pressable accessibilityRole="button" accessibilityLabel={t("mergeOptions")} accessibilityState={{ expanded: open, disabled: locked }} aria-expanded={open} disabled={locked} onPress={toggle} style={{ minHeight: compact ? 44 : 28, justifyContent: "center" }}>

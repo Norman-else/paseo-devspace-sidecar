@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { Spinner } from "./spinner";
 import { useQuery } from "@tanstack/react-query";
 import { useRpc } from "@getpaseo/plugin/client";
 import { ExternalLink, Icon, ScrollView } from "@getpaseo/plugin/client/ui";
@@ -24,7 +25,7 @@ export function ReviewChecks({ workspaceId, number, headSha, checks, colors, onF
     <ScrollView style={{ maxHeight: maxHeight === undefined ? undefined : Math.max(64, maxHeight - (entry ? height + 9 : 0)), flex: compact ? 1 : undefined, flexShrink: 1, minHeight: 0 }} contentContainerStyle={{ padding: entry ? 12 : 4, gap: entry ? 12 : 0 }}>
       {!entry ? entries.map((item) => <CheckRow key={`${item.name}:${item.url}`} label={item.name} status={t(statusLabel[item.state])} tone={tone(item.state)} icon={item.state === "passed" ? "CircleCheck" : item.state === "failed" ? "CircleX" : item.state === "skipped" ? "CircleMinus" : "CircleDot"} colors={colors} height={height} onPress={() => select(`${item.name}:${item.url}`)} />) : <>
         <View style={{ gap: 6 }}><Text selectable style={{ color: colors.foreground, fontSize: 14, fontWeight: "600", lineHeight: 20 }}>{entry.name}</Text><Text style={{ color: tone(entry.state), fontSize: 12 }}>{t(statusLabel[entry.state])}</Text></View>
-        {detail.isFetching && !detail.data ? <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 12 }}><ActivityIndicator size="small" color={colors.foregroundMuted} /><Text style={{ fontSize: 13, color: colors.foregroundMuted }}>{t("checkLoading")}</Text></View> : null}
+        {detail.isFetching && !detail.data ? <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 12 }}><Spinner size={14} color={colors.foregroundMuted} /><Text style={{ fontSize: 13, color: colors.foregroundMuted }}>{t("checkLoading")}</Text></View> : null}
         {detail.error ? <View style={{ gap: 8 }}><Text style={{ color: colors.statusDanger, fontSize: 13 }}>{t("prUnavailable")}</Text><Pressable accessibilityRole="button" onPress={() => void detail.refetch()} style={{ minHeight: height, justifyContent: "center" }}><Text style={{ color: colors.accent, fontSize: 13 }}>{t("retry")}</Text></Pressable></View> : null}
         {detail.data ? <>
           <Text selectable style={{ color: colors.foreground, fontSize: 13, lineHeight: 20 }}>{detail.data.summary || t(detail.data.external ? "externalCheck" : "noCheckSummary")}</Text>

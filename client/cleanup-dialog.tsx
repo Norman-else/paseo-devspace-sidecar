@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
+import { Spinner } from './spinner';
 import { useRpc } from '@getpaseo/plugin/client';
 import { Icon, Modal } from '@getpaseo/plugin/client/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -37,13 +38,13 @@ export function CleanupDialog({ open, onClose, agentId, workspaceId, prNumber, r
     <Modal.Content contentContainerStyle={{ padding: 0, gap: 0 }}>
       <View style={{ padding: 20, gap: 18 }}>
         {result ? <>
-          <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>{result.phase === 'cleaning' ? <ActivityIndicator color={colors.accent} /> : <Icon name={result.phase === 'done' ? 'CircleCheck' : 'CircleAlert'} size={20} color={result.phase === 'done' ? colors.statusSuccess : colors.statusWarning} />}<Text style={{ ...text, fontSize: 15, fontWeight: '600', flex: 1 }}>{t(phaseKey[result.phase])}</Text></View>
+          <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>{result.phase === 'cleaning' ? <Spinner size={20} color={colors.accent} /> : <Icon name={result.phase === 'done' ? 'CircleCheck' : 'CircleAlert'} size={20} color={result.phase === 'done' ? colors.statusSuccess : colors.statusWarning} />}<Text style={{ ...text, fontSize: 15, fontWeight: '600', flex: 1 }}>{t(phaseKey[result.phase])}</Text></View>
           <Text selectable style={muted}>{result.root}</Text>
           <Text style={muted}>{t(result.phase === 'archive_pending' ? 'cleanupArchivePendingHelp' : result.phase === 'done' ? result.archive ? 'cleanupDoneArchiveHelp' : 'cleanupDoneHelp' : result.phase === 'unknown' ? 'cleanupUnknownHelp' : 'cleanupProgressHelp')}</Text>
           {result.recoveryRef ? <Text selectable style={{ ...muted, fontSize: 12 }}>{t('cleanupRecovery')} {result.recoveryRef}</Text> : null}
           {result.error ? <Text style={{ ...text, color: colors.statusWarning }}>{result.error}</Text> : null}
           {result.workspaceCleanup?.filter(w => w.state === 'retained').map(w => <View key={w.id} style={{ padding: 12, gap: 6, borderRadius: 6, backgroundColor: colors.surface1 }}><Text style={{ ...text, fontWeight: '500' }}>{t('cleanupWorkspaceRetained')} · {w.name}</Text><Text style={muted}>{t(({ agents: 'cleanupWorkspaceAgents', terminals: 'cleanupWorkspaceTerminals', scripts: 'cleanupWorkspaceScripts', owned_worktree: 'cleanupWorkspaceOwned', changed: 'cleanupWorkspaceChanged' } as const)[w.reason ?? 'changed'])}</Text><Text selectable style={{ ...muted, fontSize: 12 }}>{w.directory}</Text></View>)}
-        </> : preview.isPending && workspaceId ? <View style={{ padding: 16, alignItems: 'center', gap: 12 }}><ActivityIndicator color={colors.accent} /><Text style={muted}>{t('cleanupChecking')}</Text></View> : preview.error ? <Text style={{ ...text, color: colors.statusWarning }}>{preview.error.message}</Text> : plan ? <>
+        </> : preview.isPending && workspaceId ? <View style={{ padding: 16, alignItems: 'center', gap: 12 }}><Spinner size={20} color={colors.accent} /><Text style={muted}>{t('cleanupChecking')}</Text></View> : preview.error ? <Text style={{ ...text, color: colors.statusWarning }}>{preview.error.message}</Text> : plan ? <>
           <View style={{ gap: 6 }}><Text style={{ ...text, fontSize: 15, fontWeight: '600' }}>{plan.branch ?? t('cleanupDetached')}</Text><Text selectable style={muted}>{plan.root}</Text><View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}><Text style={{ ...muted, fontSize: 12 }}>{plan.head.slice(0, 10)}</Text><Text style={{ ...text, fontSize: 12, color: plan.prState === 'MERGED' ? (codeReviewPalette(colors.surface0).dark ? '#a371f7' : '#8250df') : colors.foregroundMuted }}>{plan.prNumber ? `PR #${plan.prNumber} · ` : ''}{plan.prState === 'MERGED' ? t('prMerged') : plan.prState}</Text></View></View>
           <View style={{ borderRadius: 6, padding: 12, backgroundColor: colors.surface1, gap: 6 }}><Text style={text}>{t('cleanupEffect')}</Text><Text style={muted}>{t('cleanupPreserve')}</Text></View>
           {blocked ? <View style={{ gap: 6 }}>{plan.blockers.map(code => <View key={code} style={{ flexDirection: 'row', gap: 8 }}><Icon name="CircleAlert" size={16} color={colors.statusWarning} /><Text style={{ ...text, flex: 1, color: colors.statusWarning }}>{t(blockers[code as keyof typeof blockers] ?? 'cleanupBlocked')}</Text></View>)}{plan.precious.length ? <Text selectable style={{ ...muted, fontSize: 12 }}>{plan.precious.join('\n')}</Text> : null}</View> : null}

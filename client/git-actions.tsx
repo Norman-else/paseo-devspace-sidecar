@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { Spinner } from "./spinner";
 import { useQuery } from "@tanstack/react-query";
 import { useAgent, useRpc } from "@getpaseo/plugin/client";
 import { Icon } from "@getpaseo/plugin/client/ui";
@@ -73,7 +74,7 @@ export function GitActionButton({ state, colors, compact, variant }: { state: Gi
       onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)} style={{ minHeight: compact ? 44 : 28, justifyContent: "center" }}>
       {({ pressed }) => <View style={{ height, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: border, backgroundColor: background, opacity: pressed ? 0.75 : busy ? 0.7 : 1,
         borderTopLeftRadius: 4, borderBottomLeftRadius: 4, borderTopRightRadius: split ? 0 : 4, borderBottomRightRadius: split ? 0 : 4, borderRightWidth: split ? 0 : 1 }}>
-        {busy ? <ActivityIndicator size="small" color={foreground} /> : <Icon name="Sparkles" size={12} color={foreground} />}
+        {busy ? <Spinner size={12} color={foreground} /> : <Icon name="Sparkles" size={12} color={foreground} />}
         <Text numberOfLines={1} style={{ color: foreground, fontSize: 11, lineHeight: 16, fontWeight: "600" }}>{t(labels[plan.primary])}</Text>
       </View>}
     </Pressable>

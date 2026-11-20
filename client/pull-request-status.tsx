@@ -1,4 +1,5 @@
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { Spinner } from "./spinner";
 import { ExternalLink, Icon, ScrollView, copyText, useToast } from "@getpaseo/plugin/client/ui";
 import { useEffect, useState, type ReactNode } from "react";
 import type { PullRequest, PullRequestResult } from "../shared/pull-request";
@@ -17,7 +18,7 @@ export function PullRequestStatus({ result, loading, error, colors, compact = fa
   const { t } = useMessages();
   const note = { paddingHorizontal: 12, paddingVertical: 10, gap: 8, flexDirection: "row" as const, alignItems: "center" as const, borderBottomWidth: 1, borderColor: colors.border };
   const muted = { color: colors.foregroundMuted, fontSize: 11, lineHeight: 16, flex: 1 };
-  if (!result && loading) return <View style={note}><ActivityIndicator size="small" color={colors.foregroundMuted} /><Text style={muted}>{t("prLoading")}</Text></View>;
+  if (!result && loading) return <View style={note}><Spinner size={14} color={colors.foregroundMuted} /><Text style={muted}>{t("prLoading")}</Text></View>;
   if (error || result?.status === "unavailable") {
     const labels = { gh_missing: "prGhMissing", auth_required: "prAuthRequired", unsupported_remote: "prUnsupported", no_remote: "prNoRemote", detached_head: "prDetached", request_failed: "prUnavailable" } as const;
     return <View style={note}><Icon name="CircleAlert" size={15} color={colors.statusWarning} /><Text style={muted}>{t(result?.status === "unavailable" ? labels[result.reason] : "prUnavailable")}</Text></View>;
