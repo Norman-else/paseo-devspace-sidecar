@@ -5,7 +5,7 @@ import type { ReviewThread } from "../shared/review-details.ts";
 
 const thread = (id: string, patch: Partial<ReviewThread> = {}, body = "Body"): ReviewThread => ({
   id, path: "agent/graph/chat.py", line: 321, startLine: null, side: "RIGHT", resolved: false, outdated: false, truncated: false,
-  comments: [{ author: "mercoder-dev", body, url: `https://github.com/o/r/pull/74#discussion_${id}`, createdAt: "2026-11-20T00:00:00Z" }], ...patch,
+  comments: [{ author: "mercoder-dev", authorUrl: "https://github.com/apps/mercoder-dev", body, url: `https://github.com/o/r/pull/74#discussion_${id}`, createdAt: "2026-11-20T00:00:00Z" }], ...patch,
 });
 const context = { prNumber: 74, headBranch: "PSOS-6411", baseBranch: "master", headSha: "95872bd0123456789", workspace: { id: "ws_abc", root: "/u/.devspace/worktrees/Navi-1", worktree: true } };
 
@@ -20,7 +20,15 @@ test("a batch prompt numbers every comment and asks for fix, commit, push and a 
   assert.match(prompt, /### Comment 2: agent\/run\.py:470-480 \(unresolved, outdated/);
   assert.match(prompt, /By alice:\nPlease rename\n\nReply by bob:\nAgreed/);
   assert.match(prompt, /push to PSOS-6411/);
-  assert.match(prompt, /Do not merge, force-push, or reply to or resolve the threads/);
+  assert.match(prompt, /Do not merge or force-push\./);
+  assert.match(prompt, /Thread ID: 1\n/);
+  assert.match(prompt, /By mercoder-dev \(bot reviewer\):/);
+  assert.doesNotMatch(prompt, /By alice \(bot reviewer\)/);
+  assert.match(prompt, /Only do this after the push succeeded/);
+  assert.match(prompt, /Fixed: reply .* then resolve the thread/);
+  assert.match(prompt, /Not changed, human reviewer: reply with the reason and leave the thread unresolved/);
+  assert.match(prompt, /resolveReviewThread\(input:\{threadId:\$id\}\)/);
+  assert.match(prompt, /addPullRequestReviewThreadReply/);
   assert.match(prompt, /Finish with a table/);
 });
 
