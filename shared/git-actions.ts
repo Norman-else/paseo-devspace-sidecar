@@ -15,8 +15,12 @@ export type GitStatus = z.infer<typeof gitStatusSchema>;
 
 export const gitActions = ["commit", "commit-push", "commit-pr", "push", "push-pr", "pr", "branch-commit", "branch-pr"] as const;
 export type GitAction = typeof gitActions[number];
-/** "open" when an open or draft PR exists for the branch; "unknown" while loading or when GitHub is unavailable. */
-export type PrPresence = "open" | "none" | "unknown";
+/**
+ * "open": an open or draft PR exists for the branch. "done": a merged or closed PR already contains the current HEAD,
+ * so there is nothing new to propose (a squash merge leaves the branch "ahead" of the base forever).
+ * "unknown": still loading, or GitHub is unavailable.
+ */
+export type PrPresence = "open" | "none" | "done" | "unknown";
 export type GitPlan = { primary: GitAction; alternatives: GitAction[]; unpushed: number } | { blocked: "conflicts"; unpushed: number };
 
 /** Commits that are not on the remote yet. Without an upstream, everything ahead of the base branch is unpushed. */

@@ -4,7 +4,7 @@ import { gitActionPrompt, planGitActions, type GitStatus } from "../shared/git-a
 import { parsePorcelainStatus } from "../server/git.ts";
 
 const status = (patch: Partial<GitStatus> = {}): GitStatus => ({ branch: "PSOS-1", defaultBranch: "master", remote: "origin", upstream: "origin/PSOS-1", ahead: 0, behind: 0, aheadOfBase: 0, changed: 0, conflicted: 0, ...patch });
-const pick = (s: GitStatus, pr: "open" | "none" | "unknown") => { const plan = planGitActions(s, pr); return plan && "primary" in plan ? [plan.primary, ...plan.alternatives] : plan; };
+const pick = (s: GitStatus, pr: "open" | "none" | "done" | "unknown") => { const plan = planGitActions(s, pr); return plan && "primary" in plan ? [plan.primary, ...plan.alternatives] : plan; };
 
 test("Desk offers the next Git step for each branch state", () => {
   // Uncommitted work on a feature branch.
@@ -21,6 +21,9 @@ test("Desk offers the next Git step for each branch state", () => {
   // Everything is on GitHub already.
   assert.equal(pick(status({ aheadOfBase: 2 }), "open"), null);
   assert.equal(pick(status(), "none"), null, "nothing ahead of the base branch: no PR to create");
+  // A merged or closed PR already contains HEAD: a squash merge leaves the branch ahead of master, but nothing is new.
+  assert.equal(pick(status({ aheadOfBase: 1 }), "done"), null);
+  assert.deepEqual(pick(status({ aheadOfBase: 1, changed: 2 }), "done"), ["commit", "commit-push"], "new work after the merge can still be committed");
   // Never commit onto the base branch or a detached HEAD without branching first.
   assert.deepEqual(pick(status({ branch: "master", upstream: "origin/master", changed: 2 }), "none"), ["branch-pr", "branch-commit"]);
   assert.deepEqual(pick(status({ branch: null, upstream: null, changed: 1 }), "unknown"), ["branch-pr", "branch-commit"]);

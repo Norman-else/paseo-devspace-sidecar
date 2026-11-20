@@ -69,7 +69,9 @@ export function DiffPanel({ theme, host, params, tab, cleanupInitiallyOpen = fal
   const pullRequests = useQuery({ queryKey: ["devspace-pull-requests-v2", host.id, bound?.id, bound?.branch], queryFn: () => prCall({ workspaceId: bound!.id }), enabled: !!bound, refetchInterval: 30000, staleTime: 10000, retry: false });
   const currentPrResult = branchPullRequests(pullRequests.data, bound?.branch);
   const openPrs = currentPrResult?.status === "available" ? currentPrResult.pullRequests.filter((item) => item.state === "OPEN" || item.state === "DRAFT") : [];
-  const prPresence: PrPresence = pullRequests.isPending || pullRequests.error || !currentPrResult ? "unknown" : currentPrResult.status === "none" || currentPrResult.status === "available" && !openPrs.length ? "none" : openPrs.length ? "open" : "unknown";
+  const prPresence: PrPresence = pullRequests.isPending || pullRequests.error || !currentPrResult || currentPrResult.status === "unavailable" ? "unknown"
+    : currentPrResult.status === "none" ? "none" : openPrs.length ? "open"
+    : currentPrResult.pullRequests.some((item) => (item.state === "MERGED" || item.state === "CLOSED") && item.headSha === currentPrResult.localHeadSha) ? "done" : "none";
   const result = currentPrResult?.status === "available" ? currentPrResult : null;
   const pr = result?.pullRequests.find((pr) => pr.number === state.prNumber) ?? result?.pullRequests[0];
   const view = pr ? state.view : "changes";
