@@ -55,7 +55,7 @@ export function Discussions({ threads, resolved, onResolved, onJump, onFeedback,
   const toggle = (id: string) => setSelected((previous) => { const next = new Set(previous); if (!next.delete(id)) next.add(id); return next; });
   const send = (list: ReviewThread[]) => { if (!list.length || busy) return; onBatch?.(list); setSelecting(false); };
   return <View style={{ flex: 1, minHeight: 0 }} testID="devspace-comments-page">
-    <View style={{ position: "relative", zIndex: 30, paddingHorizontal: 12, minHeight: 44, flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: 8, rowGap: 4, borderBottomWidth: 1, borderColor: colors.border, backgroundColor: colors.surface0 }}><View style={{ flex: 1, minWidth: 80, flexDirection: "row", alignItems: "center" }}>{selecting ? <Text style={{ color: colors.foregroundMuted, fontSize: 12 }}>{t("batchSelected", { count: chosen.length })}</Text>
+    <View style={{ position: "relative", zIndex: 30, paddingHorizontal: 12, paddingVertical: 6, minHeight: 44, flexDirection: "row", alignItems: "center", alignContent: "center", flexWrap: "wrap", columnGap: 8, rowGap: 6, borderBottomWidth: 1, borderColor: colors.border, backgroundColor: colors.surface0 }}><View style={{ flex: 1, minWidth: 80, flexDirection: "row", alignItems: "center" }}>{selecting ? <Text style={{ color: colors.foregroundMuted, fontSize: 12 }}>{t("batchSelected", { count: chosen.length })}</Text>
         : <ReviewMenu title={t("commentFilter")} label={resolved ? t("commentFilterAllLabel", { count: threads.length }) : t("commentFilterUnresolvedLabel", { count: unresolved.length })} colors={colors} touch={width < 560} width={260} options={[
           { id: "unresolved", label: t("commentFilterUnresolved"), description: t("commentFilterUnresolvedHelp"), selected: !resolved, onSelect: () => onResolved(false) },
           { id: "all", label: t("commentFilterAll"), description: t("commentFilterAllHelp"), selected: resolved, onSelect: () => onResolved(true) },
@@ -80,8 +80,9 @@ function HeaderButton({ label, icon, primary = false, disabled = false, hint, co
   const [hover, setHover] = useState(false);
   const foreground = disabled ? colors.foregroundMuted : primary ? colors.accentForeground : colors.foreground;
   const background = disabled ? (primary ? colors.surface2 : "transparent") : primary ? colors.accent : hover ? colors.surface2 : "transparent";
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityHint={hint} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)} style={{ minHeight: 36, justifyContent: "center" }}>
-    {({ pressed }) => <View style={{ height: 26, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 9, borderRadius: 4, borderWidth: 1, borderColor: primary && !disabled ? colors.accent : colors.border, backgroundColor: background, opacity: pressed ? 0.75 : 1 }}>
+  const { width } = useWindowDimensions(), touch = Platform.OS !== "web" || width < 560;
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityHint={hint} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)} style={{ minHeight: touch ? 44 : 28, justifyContent: "center" }}>
+    {({ pressed }) => <View style={{ height: touch ? 32 : 28, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 9, borderRadius: 4, borderWidth: 1, borderColor: primary && !disabled ? colors.accent : colors.border, backgroundColor: background, opacity: pressed ? 0.75 : 1 }}>
       {icon ? <Icon name={icon} size={12} color={foreground} /> : null}
       <Text numberOfLines={1} style={{ color: foreground, fontSize: 11, lineHeight: 16, fontWeight: "600" }}>{label}</Text>
     </View>}
