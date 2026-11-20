@@ -4,19 +4,28 @@ import { workspaceSchema, type BridgeRequest, type Workspace } from "../shared/d
 import type { RemoteSource } from "./config";
 import { remoteRequest } from "./bridge";
 
+export const CATALOG_TIMEOUT_MS = 15000;
+export const STALE_CATALOG_MS = 120000;
+
 /** Route each workspace to the project host that actually owns it. */
 export class RemoteSources {
   private routes = new Map<string, RemoteSource>();
   private conflicts = new Set<string>();
   private listing: Promise<Workspace[]> | null = null;
+  // The catalog crosses the DevSpace SSH tunnel and takes 1-7s under load. Keep the last good copy so a
+  // slow or dropped round trip does not blank the panel with "Cannot reach the project host".
+  private lastGood: { at: number; workspaces: Workspace[] } | null = null;
   private cleanupRoutes: Record<string, string>;
   constructor(private sources: RemoteSource[], private cleanupFile?: string) { this.cleanupRoutes = cleanupFile ? readPrivate(cleanupFile, {}) : {}; }
   private catalog() {
     if (this.listing) return this.listing;
     const load = async () => {
-      const results = await Promise.allSettled(this.sources.map(async (source) => ({ source, workspaces: z.array(workspaceSchema).parse(await remoteRequest(source, { op: "catalog" }, 4000)) })));
+      const results = await Promise.allSettled(this.sources.map(async (source) => ({ source, workspaces: z.array(workspaceSchema).parse(await remoteRequest(source, { op: "catalog" }, CATALOG_TIMEOUT_MS)) })));
       const available = results.filter((result) => result.status === "fulfilled");
-      if (!available.length) throw new Error("Cannot reach the project host's diff bridge. Check its Paseo plugin and DevSpace connection.");
+      if (!available.length) {
+        if (this.lastGood && Date.now() - this.lastGood.at < STALE_CATALOG_MS) return this.lastGood.workspaces;
+        throw new Error("Cannot reach the project host's diff bridge. Check its Paseo plugin and DevSpace connection.");
+      }
       const workspaces = new Map<string, Workspace>(), routes = new Map<string, RemoteSource>(), conflicts = new Set<string>();
       for (const result of available) {
         for (const workspace of result.value.workspaces) {
@@ -26,7 +35,9 @@ export class RemoteSources {
       }
       for (const id of conflicts) workspaces.delete(id);
       this.routes = routes; this.conflicts = conflicts;
-      return [...workspaces.values()];
+      const list = [...workspaces.values()];
+      this.lastGood = { at: Date.now(), workspaces: list };
+      return list;
     };
     this.listing = load().finally(() => { this.listing = null; });
     return this.listing;
