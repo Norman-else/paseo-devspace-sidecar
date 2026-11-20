@@ -13,7 +13,7 @@ type Attachment = {
   path?: string; location?: string; source: string; revision?: string; capturedAt?: string;
   preview: { kind: "code"; lines: { number: number; text: string }[] } | { kind: "markdown" | "text"; text: string };
 };
-export type FeedbackDraft = { title: string; context: string; instruction: string; intent?: "explain" | "change" | "git"; attachment?: Attachment };
+export type FeedbackDraft = { title: string; context: string; instruction: string; intent?: "explain" | "change" | "git"; hint?: string; attachment?: Attachment };
 export function FeedbackComposer({ draft, agentId, colors, onClose }: { draft: FeedbackDraft | null; agentId: string; colors: Colors; onClose(): void }) {
   const { t, locale } = useMessages(), paseo = usePaseo(), toast = useToast();
   const [instruction, setInstruction] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState(false), [expanded, setExpanded] = useState(false);
@@ -55,7 +55,7 @@ export function FeedbackComposer({ draft, agentId, colors, onClose }: { draft: F
         {error ? <Text accessibilityRole="alert" style={{ color: colors.statusDanger, fontSize: 13, lineHeight: 20 }}>{t("feedbackError")}</Text> : null}
       </View>
       <View style={{ padding: 16, paddingHorizontal: 20, borderTopWidth: 1, borderColor: colors.border, gap: 12 }}>
-        <Text style={{ color: colors.foregroundMuted, fontSize: 12, lineHeight: 18 }}>{t(draft?.intent === "git" ? "gitSendHint" : "feedbackAttachmentHint")}</Text>
+        <Text style={{ color: colors.foregroundMuted, fontSize: 12, lineHeight: 18 }}>{draft?.hint ?? t(draft?.intent === "git" ? "gitSendHint" : "feedbackAttachmentHint")}</Text>
         <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>
           <FeedbackButton label={t("copyFeedback")} icon="Copy" disabled={busy || !instruction.trim()} colors={colors} onPress={() => { void copyText(message).then(() => toast.show(t("copiedFeedback"))).catch(() => toast.error(t("feedbackError"))); }} />
           <FeedbackButton label={t(busy ? "sendingFeedback" : "sendToAgent")} primary busy={busy} disabled={busy || !instruction.trim()} colors={colors} onPress={() => void send()} />

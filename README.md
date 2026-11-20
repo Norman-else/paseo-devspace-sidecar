@@ -81,6 +81,10 @@ PR creation is offered only when GitHub reports no open PR for the branch, and p
 
 Choosing an action opens a confirmation with editable instructions and the full prompt, then sends it to the session's agent. The agent runs the Git and `gh` commands through DevSpace with the bound `workspace_id`, writes the commit message and PR description itself from the diff and the conversation, follows the repository's conventions and PR template, never pushes to the base branch, and does not merge or force-push. Buttons are disabled while the agent is running; Git and PR status refresh when its turn ends. Reading Git status is read-only; the sidecar itself never commits or pushes.
 
+## Hand review comments to the agent in one go
+
+The Comments tab header has **Address all (N)** for every unresolved thread, and **Select** to tick the threads to send (all unresolved are ticked to start). Both open the same confirmation as other agent actions, with editable instructions and the full prompt. The agent checks each comment against the current code, fixes the ones that apply (overlapping comments together), explains the ones it skips, runs the relevant tests, commits and pushes to the PR branch, and ends with a per-comment table. It does not reply to or resolve threads on GitHub. Bot markup is stripped and very long comments are shortened, with the link kept for the full text. The buttons wait while the agent is running.
+
 ## Clean up finished worktrees
 
 A merged PR shows **Clean up worktree** beside its status. You can also open **More review actions → Clean up worktree**, use Command Center, or run `/devspace-cleanup`, including when the branch has no PR.

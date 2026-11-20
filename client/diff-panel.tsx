@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Pressable, Text, View, type FlatList as NativeFlatList } from "react-native";
 import { Spinner } from "./spinner";
 import { useQuery } from "@tanstack/react-query";
-import { useRpc, useTabState, type PluginAgentPanelProps } from "@getpaseo/plugin/client";
+import { useAgent, useRpc, useTabState, type PluginAgentPanelProps } from "@getpaseo/plugin/client";
+import { commentBatchPrompt } from "../shared/comment-batch";
 import { FlatList, Icon, copyText, useToast } from "@getpaseo/plugin/client/ui";
 import { z } from "zod";
 import { isWorktree, catalogRpc, comparison as comparisonSchema, contextRpc, checkpointRpc, threadsRpc, fileRpc, pullRequestRpc, reviewRpc, snapshotRpc, workspaceEmptyError, workspaceEmptyMessages, type WorkspaceEmptyReason, type ReviewFile, type Snapshot } from "../shared/diff";
@@ -201,6 +202,12 @@ export function DiffPanel({ theme, host, params, tab, cleanupInitiallyOpen = fal
     setDraft({ title, intent: kind, attachment: { path: selection.path, location: `L${from}–${to} · ${t(selection.side === "old" ? "versionOld" : "versionNew")}`, source, revision: selectedVersion, capturedAt: snapshot?.capturedAt, preview: { kind: "code", lines: selectedLines(model.rows, selection) } }, instruction: t(kind === "explain" ? "explainInstruction" : "changeInstruction"), context: `${title}\n${source}\n${selectedVersion ?? ""}\n${snapshot?.capturedAt ?? ""}\n\n\`\`\`\n${selectedCode(model.rows, selection)}\n\`\`\`\n${t("selectionLimit")}` });
   };
   const checkFeedback = (check: CheckDetail) => { if (!pr) return; setDraft({ title: check.name, attachment: { source: `PR #${pr.number}`, revision: check.headSha ?? pr.headSha, preview: { kind: "text", text: `${check.summary}\n\n${check.excerpt}` } }, instruction: t("changeInstruction"), context: `PR #${pr.number} · ${check.headSha ?? pr.headSha}\n${check.name}\n${check.url ?? ""}\n\n${check.summary}\n\n${check.excerpt}` }); };
+  const agentBusy = !!useAgent(params.agentId, (agent) => agent.status === "running" || agent.status === "initializing");
+  const batchFeedback = (list: ReviewThread[]) => {
+    if (!pr || !bound || !list.length) return;
+    const prompt = commentBatchPrompt(list, { prNumber: pr.number, headBranch: result?.branch ?? bound.branch ?? "", baseBranch: pr.baseBranch, headSha: discussions.data?.headSha ?? pr.headSha, workspace: { id: bound.id, root: bound.root, worktree: isWorktree(bound) } });
+    setDraft({ title: t("batchTitle", { count: list.length }), intent: "git", hint: t("batchHint"), instruction: t("batchInstruction"), context: prompt, attachment: { source: `PR #${pr.number} · ${t("batchTitle", { count: list.length })}`, preview: { kind: "text", text: prompt } } });
+  };
   const threadFeedback = (thread: ReviewThread) => setDraft({ title: `${thread.path}${thread.line ? ":" + thread.line : ""}`, intent: "change", attachment: { path: thread.path, location: thread.line ? `L${thread.startLine ?? thread.line}–${thread.line}` : undefined, source: `PR #${pr?.number}${thread.outdated ? " · " + t("outdated") : ""}`, revision: discussions.data?.headSha, preview: { kind: "markdown", text: thread.comments.map((comment) => `**${comment.name ?? comment.author}**\n\n${comment.body}`).join("\n\n---\n\n") } }, instruction: t("changeInstruction"), context: `PR #${pr?.number} · ${discussions.data?.headSha ?? ""}\n${thread.path}:${thread.startLine ?? thread.line ?? ""}–${thread.line ?? ""} (${thread.side})${thread.outdated ? " · " + t("outdated") : ""}\n\n${thread.comments.map((comment) => `${comment.author}: ${comment.body}\n${comment.url}`).join("\n\n")}` });
   const [pendingThread, setPendingThread] = useState<ReviewThread | null>(null);
   const threadLoading = useRef("");
@@ -276,7 +283,7 @@ export function DiffPanel({ theme, host, params, tab, cleanupInitiallyOpen = fal
     {header.showPrNotice ? <PullRequestStatus result={currentPrResult} loading={pullRequests.isPending} error={pullRequests.error} colors={colors} compact={!wide} /> : null}
     {pr ? <ReviewTabs view={view} count={discussions.data?.threads.length} compact={!wide} colors={colors} onChange={changeView} canNavigate={currentThreads.length > 0} onNavigate={(direction) => { const thread = nextDiscussion(currentThreads, currentThreadId, direction); if (thread) jumpThread(thread); }} /> : null}
     {pr && bound && view === "comments" ? <View style={{ flex: 1, minHeight: 0 }}>
-      {discussions.isPending ? <View style={{ margin: 20, alignItems: "center" }}><Spinner size={18} color={colors.foregroundMuted} /></View> : discussions.error ? <Pressable accessibilityRole="button" onPress={() => void discussions.refetch()} style={{ padding: 16 }}><Text style={{ color: colors.statusDanger, fontSize: 13 }}>{t("prUnavailable")} · {t("retry")}</Text></Pressable> : <Discussions threads={discussions.data?.threads ?? []} resolved={showResolved} onResolved={setShowResolved} onJump={jumpThread} onFeedback={threadFeedback} colors={colors} inlineAvailable={!!inlineAvailable} truncated={!!discussions.data?.truncated} />}
+      {discussions.isPending ? <View style={{ margin: 20, alignItems: "center" }}><Spinner size={18} color={colors.foregroundMuted} /></View> : discussions.error ? <Pressable accessibilityRole="button" onPress={() => void discussions.refetch()} style={{ padding: 16 }}><Text style={{ color: colors.statusDanger, fontSize: 13 }}>{t("prUnavailable")} · {t("retry")}</Text></Pressable> : <Discussions onBatch={batchFeedback} busy={agentBusy} threads={discussions.data?.threads ?? []} resolved={showResolved} onResolved={setShowResolved} onJump={jumpThread} onFeedback={threadFeedback} colors={colors} inlineAvailable={!!inlineAvailable} truncated={!!discussions.data?.truncated} />}
     </View> : null}
     {bound && view === "changes" ? <ReviewToolbar mode={comparison} modes={pr ? ["pr", "local"] : bound.baseSha ? ["task", "uncommitted"] : ["uncommitted"]} fileCount={snapshot.data?.totalFiles} reviewedCount={reviewedCount} totals={totals} compact={!wide} availableWidth={size.width}
       searchOpen={searchOpen} search={search} colors={colors} onSearchChange={setSearch} searchType={searchType} onSearchType={(type) => { setSearchType(type); setSearch(""); }} matchCount={matches.length} matchIndex={matchIndex} onMatch={match}
