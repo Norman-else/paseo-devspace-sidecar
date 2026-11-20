@@ -41,8 +41,7 @@ export function useGitActions({ workspace, agentId, pr, openPr, revision, hostId
   const plan = planGitActions(s, pr);
   if (!plan) return null;
   const parts: string[] = [];
-  if (!s.branch) parts.push(t("gitDetached"));
-  else if (s.branch === s.defaultBranch) parts.push(t("gitOnDefault", { branch: s.branch }));
+  if (s.branch && s.branch === s.defaultBranch) parts.push(t("gitOnDefault", { branch: s.branch }));
   if (s.changed) parts.push(t("gitChanged", { count: s.changed }));
   if (plan.unpushed) parts.push(t("gitUnpushed", { count: plan.unpushed }));
   if (s.behind) parts.push(t("gitBehind", { count: s.behind }));
