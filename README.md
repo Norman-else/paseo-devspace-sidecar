@@ -83,7 +83,7 @@ Choosing an action opens a confirmation with editable instructions and the full 
 
 ## Hand review comments to the agent in one go
 
-The Comments tab header has **Address all (N)** for every unresolved thread, and **Select** to tick the threads to send (all unresolved are ticked to start). Both open the same confirmation as other agent actions, with editable instructions and the full prompt. The agent checks each comment against the current code, fixes the ones that apply (overlapping comments together), explains the ones it skips, runs the relevant tests, commits and pushes to the PR branch, and ends with a per-comment table. It does not reply to or resolve threads on GitHub. Bot markup is stripped and very long comments are shortened, with the link kept for the full text. The buttons wait while the agent is running.
+The Comments tab header has a filter on the left (**Unresolved · N** or **All · N**, the same dropdown style as the Changes scope) and actions on the right: **Address all (N)** for every unresolved thread, and **Select** to tick the threads to send (all unresolved are ticked to start). Both open the same confirmation as other agent actions, with editable instructions and the full prompt. The agent checks each comment against the current code, fixes the ones that apply (overlapping comments together), explains the ones it skips, runs the relevant tests, commits and pushes to the PR branch, and ends with a per-comment table. It does not reply to or resolve threads on GitHub. Bot markup is stripped and very long comments are shortened, with the link kept for the full text. The buttons wait while the agent is running.
 
 ## Clean up finished worktrees
 

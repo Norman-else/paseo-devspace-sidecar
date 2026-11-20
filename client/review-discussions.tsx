@@ -5,6 +5,7 @@ import type { ReviewThread } from "../shared/review-details";
 import { type Colors } from "./review-ui";
 import { useMessages } from "./messages";
 import { CommentAuthor, CommentAvatar } from "./comment-author";
+import { ReviewMenu } from "./review-menu";
 export function ThreadContent({ thread, colors, onFeedback, onJump, onHeight, preview = false, selection }: { thread: ReviewThread; colors: Colors; onFeedback(thread: ReviewThread): void; onJump?(thread: ReviewThread): void; onHeight?(height: number): void; preview?: boolean; selection?: { checked: boolean; onToggle(): void } }) {
   const { t } = useMessages();
   const { width } = useWindowDimensions();
@@ -46,6 +47,7 @@ export function InlineDiscussion({ thread, expanded, onToggle, colors, onFeedbac
 }
 export function Discussions({ threads, resolved, onResolved, onJump, onFeedback, colors, inlineAvailable, truncated, onBatch, busy = false }: { threads: ReviewThread[]; resolved: boolean; onResolved(value: boolean): void; onJump(thread: ReviewThread): void; onFeedback(thread: ReviewThread): void; colors: Colors; inlineAvailable: boolean; truncated: boolean; onBatch?(threads: ReviewThread[]): void; busy?: boolean }) {
   const { t } = useMessages();
+  const { width } = useWindowDimensions();
   const filtered = threads.filter((thread) => resolved || !thread.resolved);
   const unresolved = threads.filter((thread) => !thread.resolved);
   const [selecting, setSelecting] = useState(false), [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
@@ -53,14 +55,18 @@ export function Discussions({ threads, resolved, onResolved, onJump, onFeedback,
   const toggle = (id: string) => setSelected((previous) => { const next = new Set(previous); if (!next.delete(id)) next.add(id); return next; });
   const send = (list: ReviewThread[]) => { if (!list.length || busy) return; onBatch?.(list); setSelecting(false); };
   return <View style={{ flex: 1, minHeight: 0 }} testID="devspace-comments-page">
-    <View style={{ paddingHorizontal: 12, minHeight: 44, flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: 8, rowGap: 4, borderBottomWidth: 1, borderColor: colors.border }}><Text style={{ flex: 1, minWidth: 80, color: colors.foregroundMuted, fontSize: 12 }}>{selecting ? t("batchSelected", { count: chosen.length }) : t("threadComments", { count: filtered.length })}</Text>
+    <View style={{ paddingHorizontal: 12, minHeight: 44, flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: 8, rowGap: 4, borderBottomWidth: 1, borderColor: colors.border }}><View style={{ flex: 1, minWidth: 80, flexDirection: "row", alignItems: "center" }}>{selecting ? <Text style={{ color: colors.foregroundMuted, fontSize: 12 }}>{t("batchSelected", { count: chosen.length })}</Text>
+        : <ReviewMenu title={t("commentFilter")} label={resolved ? t("commentFilterAllLabel", { count: threads.length }) : t("commentFilterUnresolvedLabel", { count: unresolved.length })} colors={colors} touch={width < 560} width={260} options={[
+          { id: "unresolved", label: t("commentFilterUnresolved"), description: t("commentFilterUnresolvedHelp"), selected: !resolved, onSelect: () => onResolved(false) },
+          { id: "all", label: t("commentFilterAll"), description: t("commentFilterAllHelp"), selected: resolved, onSelect: () => onResolved(true) },
+        ]} />}</View>
       {onBatch && selecting ? <>
         <HeaderButton label={t("batchCancel")} colors={colors} onPress={() => setSelecting(false)} />
         <HeaderButton primary icon="Sparkles" label={t("batchSend", { count: chosen.length })} hint={busy ? t("gitAgentBusy") : undefined} disabled={!chosen.length || busy} colors={colors} onPress={() => send(chosen)} />
       </> : onBatch && unresolved.length ? <>
         <HeaderButton icon="ListChecks" label={t("batchSelect")} colors={colors} onPress={() => { setSelected(new Set(unresolved.map((thread) => thread.id))); setSelecting(true); }} />
         <HeaderButton primary icon="Sparkles" label={t("batchAll", { count: unresolved.length })} hint={busy ? t("gitAgentBusy") : undefined} disabled={busy} colors={colors} onPress={() => send(unresolved)} />
-      </> : null}{selecting ? null : <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: resolved }} onPress={() => onResolved(!resolved)} style={{ minHeight: 44, justifyContent: "center" }}><Text style={{ color: colors.foregroundMuted, fontSize: 12 }}>{resolved ? "✓ " : ""}{t("showResolved")}</Text></Pressable>}</View>
+      </> : null}</View>
     {!inlineAvailable ? <Text style={{ paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, color: colors.foregroundMuted }}>{t("inlineMismatch")}</Text> : null}
     <FlatList<ReviewThread> data={filtered} style={{ flex: 1 }} keyExtractor={(thread) => thread.id} initialNumToRender={6} windowSize={7}
       ListEmptyComponent={<Text style={{ padding: 16, color: colors.foregroundMuted, fontSize: 13 }}>{t("noDiscussions")}</Text>}
