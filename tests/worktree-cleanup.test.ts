@@ -13,7 +13,7 @@ const git = (root: string, ...args: string[]) => execFileSync('git', ['-C',root,
 async function fixture() {
   const dir = await mkdtemp(join(tmpdir(), 'sidecar-cleanup-')), repo = join(dir,'repo'), tree = join(dir,'trees','task');
   await mkdir(repo); await mkdir(join(dir,'trees')); git(repo,'init'); git(repo,'config','user.name','Cleanup test'); git(repo,'config','user.email','test@example.invalid');
-  await writeFile(join(repo,'file.txt'),'first\n'); await writeFile(join(repo,'.gitignore'),'node_modules/\n.env\n'); git(repo,'add','.'); git(repo,'commit','-m','initial'); git(repo,'worktree','add','-b','task',tree);
+  await writeFile(join(repo,'file.txt'),'first\n'); await writeFile(join(repo,'.gitignore'),'node_modules/\n.env\n__pycache__/\n*.pyc\n.ruff_cache/\n.venv/\nsecrets/\n'); git(repo,'add','.'); git(repo,'commit','-m','initial'); git(repo,'worktree','add','-b','task',tree);
   const db = new DatabaseSync(join(dir,'devspace.sqlite')); db.exec('CREATE TABLE workspace_sessions(id TEXT PRIMARY KEY, root TEXT, source_root TEXT, status TEXT, last_used_at TEXT)');
   db.prepare('INSERT INTO workspace_sessions VALUES(?,?,?,?,?)').run('ws_test',tree,repo,'active','2026-11-13');
   const session = () => { const row = db.prepare('SELECT * FROM workspace_sessions').get()!; return { id: row.id, root: row.root, sourceRoot: row.source_root, status: row.status, lastUsedAt: row.last_used_at, mode: 'worktree', managed: true }; };
@@ -37,6 +37,16 @@ test('dirty, untracked and precious ignored files block cleanup; disposable depe
     await writeFile(join(f.tree,'file.txt'),'changed'); await writeFile(join(f.tree,'new.txt'),'untracked'); await writeFile(join(f.tree,'.env'),'local-only-value'); await mkdir(join(f.tree,'node_modules')); await writeFile(join(f.tree,'node_modules','cache'),'disposable');
     const p=await f.engine.preview('ws_test'); assert.ok(p.blockers.includes('changes')); assert.ok(p.blockers.includes('ignored')); assert.deepEqual(p.precious,['.env']);
     await assert.rejects(f.engine.execute('ws_test',p.token,randomUUID()),/contains files/); await access(f.tree); assert.equal(f.db.prepare('SELECT status FROM workspace_sessions').get()!.status,'active');
+  } finally { await f.finish(); }
+});
+test('regenerable caches do not block cleanup; other ignored folders still do', async () => {
+  const f=await fixture(); try {
+    for (const dir of ['__pycache__', 'pkg/__pycache__', '.ruff_cache/0.17.6', '.venv/lib']) await mkdir(join(f.tree, dir), { recursive: true });
+    await writeFile(join(f.tree,'__pycache__','conftest.cpython-312.pyc'),'x'); await writeFile(join(f.tree,'pkg','__pycache__','a.cpython-312.pyc'),'x');
+    await writeFile(join(f.tree,'.ruff_cache','0.17.6','1234'),'x'); await writeFile(join(f.tree,'.venv','lib','site.py'),'x'); await writeFile(join(f.tree,'stray.pyc'),'x');
+    let p=await f.engine.preview('ws_test'); assert.deepEqual(p.blockers,[]); assert.deepEqual(p.precious,[]);
+    await mkdir(join(f.tree,'secrets')); await writeFile(join(f.tree,'secrets','token'),'keep');
+    p=await f.engine.preview('ws_test'); assert.deepEqual(p.blockers,['ignored']); assert.deepEqual(p.precious,['secrets/token']);
   } finally { await f.finish(); }
 });
 test('active background processes, tool calls, changed HEAD and main checkout are rejected', async () => {

@@ -11,7 +11,16 @@ const git = async (cwd, args) => (await exec('git', ['--no-optional-locks', '-C'
 const inside = (base, path) => { const r = relative(base, path); return !!r && r !== '..' && !r.startsWith('../') && !r.startsWith('..\\') && !isAbsolute(r); };
 const pathKey = path => { const key = resolve(path).replace(/\\/g, '/'); return process.platform === 'win32' ? key.toLowerCase() : key; };
 const registeredRoot = (entry, root) => entry.some(line => line.startsWith('worktree ') && pathKey(line.slice(9)) === pathKey(root));
-const disposable = (path) => path === '.DS_Store' || /(^|\/)(node_modules|dist|build|target|coverage|\.next|\.turbo|\.cache|\.gradle)(\/|$)/.test(path);
+// Ignored content that tools regenerate: dependencies, build output and caches. Anything else ignored (.env,
+// local config, data) blocks cleanup, because `git worktree remove` deletes ignored files with the worktree.
+const disposableDirs = new Set([
+  'node_modules', 'dist', 'build', 'target', 'coverage', '.next', '.turbo', '.cache', '.gradle', '.parcel-cache', '.svelte-kit', '.nuxt', '.vite', '.angular', '.expo', 'storybook-static',
+  '__pycache__', '.pytest_cache', '.ruff_cache', '.mypy_cache', '.pytype', '.pyre', '.hypothesis', '.tox', '.nox', '.venv', 'venv', 'htmlcov', '.ipynb_checkpoints', '.eggs',
+  '.terraform', '.dart_tool',
+]);
+const disposableFile = /(^|\/)(\.DS_Store|Thumbs\.db|\.eslintcache|\.coverage(\.[\w.-]+)?|[^/]+\.py[cod]|[^/]+\.tsbuildinfo)$/;
+export const disposableExcludes = [...disposableDirs, '*.egg-info'].map(dir => `:(exclude,glob)**/${dir}/**`);
+export const disposable = (path) => path.replace(/\/$/, '').split('/').some(segment => disposableDirs.has(segment) || segment.endsWith('.egg-info')) || disposableFile.test(path);
 function save(path, value) { mkdirSync(join(path, '..'), { recursive: true, mode: 0o700 }); const tmp = `${path}.${randomUUID()}.tmp`; writeFileSync(tmp, JSON.stringify(value), { mode: 0o600 }); renameSync(tmp, path); }
 
 /** Runs inside DevSpace 1.1.1, with its actual registry, store and operation tracker. */
@@ -72,7 +81,8 @@ export class DevspaceLifecycle {
     const branch = entry.find(s => s.startsWith('branch '))?.slice(7).replace(/^refs\/heads\//, '') ?? null;
     const changes = (await git(root, ['status', '--porcelain=v1', '-z', '--untracked-files=all'])).split('\0').filter(Boolean);
     if (changes.length) blockers.push('changes');
-    const precious = (await git(root, ['ls-files', '--others', '--ignored', '--exclude-standard', '-z'])).split('\0').filter(p => p && !disposable(p));
+    // Cache folders are excluded by pathspec so large ones (.venv, node_modules) are never listed file by file.
+    const precious = (await git(root, ['ls-files', '--others', '--ignored', '--exclude-standard', '-z', '--', '.', ...disposableExcludes])).split('\0').filter(p => p && !disposable(p));
     if (precious.length) blockers.push('ignored');
     if (this.busy(id)) blockers.push('busy');
     return { sourceId: this.state.sourceId, workspaceId: id, root, sourceRoot, head, branch, lastUsedAt: session.lastUsedAt, blockers, changeCount: changes.length, precious: precious.slice(0, 20) };
