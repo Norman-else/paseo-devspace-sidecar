@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
 import { Spinner } from "./spinner";
 import { usePaseo } from "@getpaseo/plugin/client";
 import { Icon, Markdown, Modal, TextInput, copyText, useToast } from "@getpaseo/plugin/client/ui";
@@ -66,7 +66,8 @@ export function FeedbackComposer({ draft, agentId, colors, onClose }: { draft: F
 }
 function Disclosure({ label, expanded, onPress, colors }: { label: string; expanded: boolean; onPress(): void; colors: Colors }) {
   const [hover, setHover] = useState(false);
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ expanded }} aria-expanded={expanded} onPress={onPress} onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)} style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 10, minHeight: 48, paddingHorizontal: 12, backgroundColor: hover || pressed ? colors.surface2 : colors.surface1 })}>
+  const desktop = useDesktop();
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ expanded }} aria-expanded={expanded} onPress={onPress} onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)} style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 10, minHeight: desktop ? 40 : 48, paddingHorizontal: 12, backgroundColor: hover || pressed ? colors.surface2 : colors.surface1 })}>
     <Icon name="Paperclip" size={16} color={colors.foregroundMuted} /><Text style={{ flex: 1, color: colors.foreground, fontSize: 13 }}>{label}</Text><Icon name={expanded ? "ChevronUp" : "ChevronDown"} size={16} color={colors.foregroundMuted} />
   </Pressable>;
 }
@@ -89,8 +90,11 @@ function CodePreview({ lines, path, colors }: { lines: { number: number; text: s
 }
 function FeedbackButton({ label, icon, primary, busy, disabled, colors, onPress }: { label: string; icon?: string; primary?: boolean; busy?: boolean; disabled: boolean; colors: Colors; onPress(): void }) {
   const [hover, setHover] = useState(false);
+  // 44px is a touch target; a pointer on a desktop window gets the compact size used elsewhere in the panel.
+  const desktop = useDesktop();
   const foreground = primary ? colors.accentForeground : colors.foreground;
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled, busy }} disabled={disabled} onPress={onPress} onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)} style={({ pressed }) => ({ minHeight: 44, flexShrink: 1, paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderColor: primary ? colors.accent : hover ? colors.foregroundMuted : colors.border, backgroundColor: primary ? colors.accent : hover || pressed ? colors.surface2 : "transparent", borderRadius: 6, opacity: disabled ? 0.45 : pressed ? 0.75 : 1 })}>
-    {busy ? <Spinner size={15} color={foreground} /> : icon ? <Icon name={icon} size={15} color={foreground} /> : null}<Text style={{ color: foreground, fontSize: 14, lineHeight: 20, fontWeight: primary ? "600" : "400", flexShrink: 1, textAlign: "center" }}>{label}</Text>
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled, busy }} disabled={disabled} onPress={onPress} onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)} style={({ pressed }) => ({ minHeight: desktop ? 32 : 44, flexShrink: 1, paddingHorizontal: desktop ? 12 : 16, paddingVertical: desktop ? 0 : 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderColor: primary ? colors.accent : hover ? colors.foregroundMuted : colors.border, backgroundColor: primary ? colors.accent : hover || pressed ? colors.surface2 : "transparent", borderRadius: 6, opacity: disabled ? 0.45 : pressed ? 0.75 : 1 })}>
+    {busy ? <Spinner size={desktop ? 14 : 15} color={foreground} /> : icon ? <Icon name={icon} size={desktop ? 14 : 15} color={foreground} /> : null}<Text style={{ color: foreground, fontSize: desktop ? 13 : 14, lineHeight: desktop ? 18 : 20, fontWeight: primary ? "600" : "400", flexShrink: 1, textAlign: "center" }}>{label}</Text>
   </Pressable>;
 }
+function useDesktop() { const { width } = useWindowDimensions(); return Platform.OS === "web" && width >= 560; }
