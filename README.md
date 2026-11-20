@@ -65,7 +65,7 @@ PR status requires `gh` (GitHub CLI) installed and authenticated on the project 
 
 ## Commit, push and create a PR
 
-When the workspace has work that is not on GitHub yet, an action bar under the header shows what is pending (uncommitted files, unpushed commits, no PR yet) and offers the next step as a split button:
+When the workspace has work that is not on GitHub yet, Desk offers the next step as a split button. Without a PR it sits in the branch row as the main action, next to a summary of what is pending (uncommitted files, unpushed commits, no PR yet). With an open PR it is an outlined button left of the merge button, and the existing "local files differ from the PR" notice shows what is pending:
 
 | State | Main action | Other choices |
 | --- | --- | --- |
