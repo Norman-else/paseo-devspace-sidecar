@@ -1,5 +1,6 @@
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import { ExternalLink, Icon, ScrollView } from "@getpaseo/plugin/client/ui";
+import { ExternalLink, Icon, ScrollView, copyText, useToast } from "@getpaseo/plugin/client/ui";
+import { useEffect, useState } from "react";
 import type { PullRequest, PullRequestResult } from "../shared/pull-request";
 import { codeReviewPalette, diffBackground } from "../shared/appearance";
 import { MergePrAction } from "./merge-pr-action";
@@ -44,7 +45,7 @@ function PullRequestSummary({ pr, result, colors, compact, workspaceId, maxCheck
   const checkTone = checks.status === "failed" ? colors.statusDanger : checks.status === "passed" ? colors.statusSuccess : checks.status === "pending" ? colors.statusWarning : colors.foregroundMuted;
   const checksLabel = checks.status === "passed" ? t("prChecksPassed", { count: checks.passed }) : checks.status === "failed" ? t("prChecksFailed", { count: checks.failed }) : checks.status === "pending" ? t("prChecksPending", { count: checks.pending }) : t(checks.status === "none" ? "prNoChecks" : checks.status === "skipped" ? "prChecksSkipped" : "prChecksUnknown");
   return <>
-    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+    <View style={{ position: "relative", zIndex: 20, flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
       <View style={{ flex: 1, minWidth: 0, minHeight: 24, flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: 16, rowGap: 4 }}>
         <View style={{ flexGrow: compact ? 1 : 0, flexBasis: compact ? 0 : "auto", flexShrink: 1, minWidth: 0, maxWidth: "100%", flexDirection: "row", alignItems: "center", gap: 8 }}>
           <View style={{ flexShrink: 0 }}><ExternalLink href={pr.url} accessibilityLabel={t("prOpenLink", { number: pr.number })}>
@@ -57,7 +58,7 @@ function PullRequestSummary({ pr, result, colors, compact, workspaceId, maxCheck
       </View>
       <StatusBadge label={t(stateKey[pr.state])} tone={tone} colors={colors} filled solid={pr.state === "MERGED"} />
     </View>
-    {compact ? <View style={{ alignItems: "flex-start" }}><BranchComparison source={result.branch} target={pr.baseBranch} colors={colors} /></View> : null}
+    {compact ? <View style={{ position: "relative", zIndex: 20, alignItems: "flex-start" }}><BranchComparison source={result.branch} target={pr.baseBranch} colors={colors} /></View> : null}
     <Text numberOfLines={2} style={{ color: colors.foreground, fontSize: 13, fontWeight: "500", lineHeight: 19 }}>{pr.title}</Text>
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
       <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: 12, rowGap: 6 }}>
@@ -78,11 +79,24 @@ function PullRequestSummary({ pr, result, colors, compact, workspaceId, maxCheck
 }
 
 function BranchComparison({ source, target, colors }: { source: string; target: string; colors: Colors }) {
-  const { t } = useMessages(), { fontFamily } = useCodeAppearance();
-  return <View testID="devspace-branch-comparison" accessible accessibilityLabel={t("prBranchDirection", { source, target })} style={{ flexDirection: "row", alignItems: "center", maxWidth: "100%", minHeight: 24, paddingHorizontal: 8, gap: 6, borderRadius: 4, backgroundColor: colors.surface1 }}>
-    <Text testID="devspace-source-branch" selectable numberOfLines={1} ellipsizeMode="middle" style={{ flexShrink: 1, minWidth: 0, maxWidth: 200, color: colors.foreground, fontFamily, fontSize: 12, lineHeight: 18, fontWeight: "500" }}>{source}</Text>
+  const { t } = useMessages(), { fontFamily } = useCodeAppearance(), toast = useToast();
+  const [copied, setCopied] = useState(false), [hover, setHover] = useState(false), [pinned, setPinned] = useState(false), [copyHover, setCopyHover] = useState(false);
+  useEffect(() => { if (!copied) return; const timer = setTimeout(() => setCopied(false), 1500); return () => clearTimeout(timer); }, [copied]);
+  const copy = () => { void copyText(source).then(() => { setCopied(true); toast.show(t("branchCopied")); }).catch(() => toast.error(t("branchCopyFailed"))); };
+  const showFull = (hover || pinned) && source.length > 24;
+  return <View testID="devspace-branch-comparison" accessible accessibilityLabel={t("prBranchDirection", { source, target })} style={{ position: "relative", flexDirection: "row", alignItems: "center", maxWidth: "100%", minHeight: 24, paddingLeft: 2, paddingRight: 8, gap: 4, borderRadius: 4, backgroundColor: colors.surface1 }}>
+    <Pressable testID="devspace-copy-branch" accessibilityRole="button" accessibilityLabel={t("copyBranch")} onPress={copy} onHoverIn={() => setCopyHover(true)} onHoverOut={() => setCopyHover(false)}
+      style={{ width: 22, height: 22, alignItems: "center", justifyContent: "center", borderRadius: 3, backgroundColor: copyHover ? colors.surface2 : "transparent" }}>
+      <Icon name={copied ? "Check" : "Copy"} size={12} color={copied ? colors.statusSuccess : colors.foregroundMuted} />
+    </Pressable>
+    <Pressable onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)} onLongPress={() => setPinned(true)} onPressOut={() => setPinned(false)} style={{ flexShrink: 1, minWidth: 0 }}>
+      <Text testID="devspace-source-branch" selectable numberOfLines={1} ellipsizeMode="middle" style={{ flexShrink: 1, minWidth: 0, maxWidth: 200, color: colors.foreground, fontFamily, fontSize: 12, lineHeight: 18, fontWeight: "500" }}>{source}</Text>
+    </Pressable>
     <Text style={{ flexShrink: 0, color: colors.foregroundMuted, fontSize: 12, lineHeight: 18 }}>→</Text>
     <Text testID="devspace-base-branch" selectable numberOfLines={1} ellipsizeMode="middle" style={{ flexShrink: 0, maxWidth: 112, color: colors.foregroundMuted, fontFamily, fontSize: 12, lineHeight: 18 }}>{target}</Text>
+    {showFull ? <View testID="devspace-branch-popover" pointerEvents="none" style={{ position: "absolute", top: "100%", right: 0, marginTop: 4, zIndex: 40, maxWidth: 420, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 4, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface0, boxShadow: "0 4px 14px rgba(0,0,0,0.25)" }}>
+      <Text style={{ color: colors.foreground, fontFamily, fontSize: 12, lineHeight: 18 }}>{source}</Text>
+    </View> : null}
   </View>;
 }
 
