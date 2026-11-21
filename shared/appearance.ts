@@ -34,11 +34,17 @@ export function diffBackground(tone: string, surface: string): string {
   return "#" + foreground.map((channel, index) => Math.round(channel * shade * alpha + background[index] * (1 - alpha)).toString(16).padStart(2, "0")).join("");
 }
 
-/** Neutral code surfaces and change fills sampled from the supplied review reference. */
+/**
+ * Code surfaces follow the host theme: the diff sits on the theme's own surface, and file headers, hover and
+ * borders are that surface lifted towards white, so a black theme gets black code with subtle layers instead of
+ * grey slabs. Change fills stay saturated green and red.
+ */
 export function codeReviewPalette(surface: string) {
   const background = rgb(surface);
   const dark = !background || background[0] * 0.2126 + background[1] * 0.7152 + background[2] * 0.0722 < 128;
+  const base = background ?? [33, 33, 33];
+  const lift = (amount: number) => "#" + base.map((channel) => Math.round(channel + (255 - channel) * amount).toString(16).padStart(2, "0")).join("");
   return dark
-    ? { dark, background: "#212121", header: "#303030", hover: "#383838", border: "#3a3a3a", added: "#0f3419", removed: "#3d1419", addedMarker: "#00bc7d", removedMarker: "#f0506e" }
+    ? { dark, background: lift(0), header: lift(0.06), hover: lift(0.1), border: lift(0.12), added: "#0f3419", removed: "#3d1419", addedMarker: "#00bc7d", removedMarker: "#f0506e" }
     : { dark, background: surface, header: surface, hover: surface, border: "#d8d8d8", added: "#e6f2e4", removed: "#f8e5e2", addedMarker: "#2b873c", removedMarker: "#bd4350" };
 }

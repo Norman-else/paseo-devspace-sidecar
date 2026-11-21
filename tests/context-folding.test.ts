@@ -22,9 +22,11 @@ test("a 94-line folded region expands in place and can collapse without losing i
   assert.equal((collapsed.rows.find((row) => row.key === key) as any).count, 94);
   assert.equal(lines.length, 94);
 });
-test("code review uses a neutral dark surface with saturated change fills and readable distinct light fills", () => {
+test("code review follows the theme surface with lifted layers, saturated change fills and readable light fills", () => {
   const dark = codeReviewPalette("#141b18");
-  assert.equal(dark.background, "#212121"); assert.equal(dark.added, "#0f3419"); assert.equal(dark.removed, "#3d1419");
+  assert.equal(dark.background, "#141b18", "code sits on the theme surface"); assert.equal(dark.added, "#0f3419"); assert.equal(dark.removed, "#3d1419");
+  const black = codeReviewPalette("#000000");
+  assert.equal(black.background, "#000000"); assert.equal(black.header, "#0f0f0f"); assert.equal(black.hover, "#1a1a1a"); assert.equal(black.border, "#1f1f1f");
   assert.notEqual(dark.addedMarker, dark.added); assert.notEqual(dark.removedMarker, dark.removed);
   const light = codeReviewPalette("#fafafa");
   assert.equal(light.background, "#fafafa"); assert.notEqual(light.added, light.removed); assert.notEqual(light.added, light.background);
