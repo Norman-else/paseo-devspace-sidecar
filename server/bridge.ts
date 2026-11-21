@@ -20,7 +20,7 @@ export async function startBridge(config: Extract<Config, { mode: "local" }>, lo
       let size = 0;
       for await (const chunk of req) {
         size += chunk.length;
-        if (size > 16384) { respond(413, { error: "Request too large." }); req.destroy(); return; }
+        if (size > 131072) { respond(413, { error: "Request too large." }); req.destroy(); return; }
         chunks.push(Buffer.from(chunk));
       }
       const input = bridgeRequest.safeParse(JSON.parse(Buffer.concat(chunks).toString("utf8")));

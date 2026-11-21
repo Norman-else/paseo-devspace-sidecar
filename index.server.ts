@@ -4,6 +4,7 @@ import { cleanupPreviewRpc, cleanupExecuteRpc, cleanupStatusRpc, cleanupReceiptR
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { z } from "zod";
 import { gitStatusSchema } from "./shared/git-actions";
+import { fileListSchema, fileReadRpc, fileReadSchema, fileWriteResultSchema, fileWriteRpc, filesListRpc } from "./shared/files";
 import { catalogRpc, gitStatusRpc, devspaceWorkspaceIds, fileRpc, fileResultSchema, pullRequestRpc, reviewRpc, reviewSchema, snapshotRpc, snapshotSchema, sessionWorkspaces, suggestedWorkspace, workspaceSchema, workspaceInspectionSchema, type BridgeRequest } from "./shared/diff";
 import { pullRequestResultSchema } from "./shared/pull-request";
 import { loadConfig, configDirectory } from "./server/config";
@@ -53,6 +54,9 @@ export default function contribute(server: PluginServerContext) {
   server.handle(snapshotRpc, async (input) => snapshotSchema.parse(await (await ready).request({ op: "snapshot", ...input })));
   server.handle(fileRpc, async (input) => fileResultSchema.parse(await (await ready).request({ op: "file", ...input })));
   server.handle(reviewRpc, async (input) => reviewSchema.parse(await (await ready).request({ op: "review", ...input })));
+  server.handle(filesListRpc, async (input) => fileListSchema.parse(await (await ready).request({ op: "files-list", ...input })));
+  server.handle(fileReadRpc, async (input) => fileReadSchema.parse(await (await ready).request({ op: "files-read", ...input })));
+  server.handle(fileWriteRpc, async (input) => fileWriteResultSchema.parse(await (await ready).request({ op: "files-write", ...input })));
   server.handle(gitStatusRpc, async (input) => gitStatusSchema.parse(await (await ready).request({ op: "git-status", ...input })));
   server.handle(pullRequestRpc, async (input) => pullRequestResultSchema.parse(await (await ready).request({ op: "pull-requests", ...input })));
   server.handle(mergeOptionsRpc, async (input) => mergeOptionsRpc.output.parse(await (await ready).request({ op: "merge-options", ...input })));

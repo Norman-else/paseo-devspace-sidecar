@@ -87,7 +87,7 @@ export function installSelectionCursor(foreground: string, surface: string) {
 }
 
 
-type DismissEvent = { key?: string; target?: SelectionElement | null; preventDefault?(): void; stopPropagation?(): void };
+type DismissEvent = { key?: string; metaKey?: boolean; ctrlKey?: boolean; target?: SelectionElement | null; preventDefault?(): void; stopPropagation?(): void };
 export function popoverScopeProps(scope: string) {
   return Platform.OS === "web" ? { dataSet: { devspacePopoverScope: scope } } : {};
 }
@@ -99,4 +99,11 @@ export function watchPopoverDismiss(scope: string, close: () => void) {
   const listeners = [["pointerdown", outside, true], ["focusin", outside, true], ["keydown", key, true], ["resize", close, false], ["blur", close, false]] as const;
   for (const [name, listener, capture] of listeners) window.addEventListener(name, listener, capture);
   return () => { for (const [name, listener, capture] of listeners) window.removeEventListener(name, listener, capture); };
+}
+/** Cmd/Ctrl+S while editing a file in Desk. Native platforms have no keyboard shortcut. */
+export function watchSaveShortcut(save: () => void) {
+  if (Platform.OS !== "web" || typeof window === "undefined") return () => {};
+  const key = (event: DismissEvent) => { if ((event.metaKey || event.ctrlKey) && event.key?.toLowerCase() === "s") { event.preventDefault?.(); event.stopPropagation?.(); save(); } };
+  window.addEventListener("keydown", key, true);
+  return () => window.removeEventListener("keydown", key, true);
 }

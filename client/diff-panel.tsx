@@ -27,22 +27,23 @@ import { useStickyFileHeader } from "./use-sticky-file-header";
 import { Discussions, InlineDiscussion } from "./review-discussions";
 import { FeedbackComposer, type FeedbackDraft } from "./feedback-composer";
 import { GitActionButton, useGitActions } from "./git-actions";
+import { FileBrowser } from "./file-browser";
 import type { PrPresence } from "../shared/git-actions";
 import { ReviewOptions } from "./review-options";
 import { clearNativeCodeSelection, installSelectionCursor, watchCodeSelection, stableScrollbarStyle } from "./web";
-import { ReviewTabs } from "./review-tabs";
+import { ReviewTabs, type ReviewView } from "./review-tabs";
 import { FloatingSelectionActions } from "./floating-selection-actions";
 import { useCodeSelection } from "./use-code-selection";
 import { ContextGap } from "./context-gap";
 import { codeReviewPalette } from "../shared/appearance";
 import { fileDiscussions, nextDiscussion } from "../shared/comment-navigation";
 
-const stateSchema = z.object({ comparison: comparisonSchema, scope: z.string().default(""), collapsed: z.array(z.string()).default([]), reviewed: z.record(z.string(), z.string()).default({}), indexVisible: z.boolean().default(true), indexWidth: z.number().min(140).max(520).nullable().default(null), prNumber: z.number().int().optional(), filter: z.enum(["all", "unreviewed", "since"]).default("all"), points: z.record(z.string(), checkpointSchema).default({}), view: z.enum(["changes", "comments"]).default("changes"), workspaceId: z.string().optional() });
+const stateSchema = z.object({ comparison: comparisonSchema, scope: z.string().default(""), collapsed: z.array(z.string()).default([]), reviewed: z.record(z.string(), z.string()).default({}), indexVisible: z.boolean().default(true), indexWidth: z.number().min(140).max(520).nullable().default(null), prNumber: z.number().int().optional(), filter: z.enum(["all", "unreviewed", "since"]).default("all"), points: z.record(z.string(), checkpointSchema).default({}), view: z.enum(["changes", "comments", "files"]).default("changes"), filesDir: z.string().default(""), filesPath: z.string().optional(), workspaceId: z.string().optional() });
 type Jump = { path: string; key?: string };
 export function DiffPanel({ theme, host, params, tab, cleanupInitiallyOpen = false }: PluginAgentPanelProps & { cleanupInitiallyOpen?: boolean }) {
   const { t, translateBackend, locale } = useMessages(), toast = useToast();
   const typography = useCodeAppearance();
-  const [state, save] = useTabState(tab, stateSchema, { comparison: "task" as const, scope: "", collapsed: [] as string[], reviewed: {} as Record<string, string>, indexVisible: true, indexWidth: null as number | null, filter: "all" as const, points: {}, view: "changes" as const });
+  const [state, save] = useTabState(tab, stateSchema, { comparison: "task" as const, scope: "", collapsed: [] as string[], reviewed: {} as Record<string, string>, indexVisible: true, indexWidth: null as number | null, filter: "all" as const, points: {}, view: "changes" as const, filesDir: "" });
   const latestState = useRef(state); latestState.current = state;
   const [dragWidth, setDragWidth] = useState<number | null>(null), [size, setSize] = useState({ width: 700, height: 700 });
   const [search, setSearch] = useState(""), [searchOpen, setSearchOpen] = useState(false), [searchType, setSearchType] = useState<"files" | "code">("files");
@@ -76,7 +77,7 @@ export function DiffPanel({ theme, host, params, tab, cleanupInitiallyOpen = fal
     : currentPrResult.pullRequests.some((item) => (item.state === "MERGED" || item.state === "CLOSED") && item.headSha === currentPrResult.localHeadSha) ? "done" : "none";
   const result = currentPrResult?.status === "available" ? currentPrResult : null;
   const pr = result?.pullRequests.find((pr) => pr.number === state.prNumber) ?? result?.pullRequests[0];
-  const view = pr ? state.view : "changes";
+  const view: ReviewView = state.view === "comments" ? (pr ? "comments" : "changes") : state.view;
   const comparison: Snapshot["comparison"] = pr ? state.comparison === "local" ? "local" : "pr" : state.comparison === "uncommitted" || !bound?.baseSha ? "uncommitted" : "task";
   const scope = `${params.agentId}:${bound?.id}:${bound?.branch ?? ""}:${comparison}:${pr?.number ?? ""}`;
   const point = state.points[scope];
@@ -230,7 +231,7 @@ export function DiffPanel({ theme, host, params, tab, cleanupInitiallyOpen = fal
     }).catch((error) => { if (currentVersion.current === version) { setPendingThread(null); toast.error(translateBackend(error instanceof Error ? error.message : t("contextFailed"))); } });
   }, [pendingThread, view, comparison, since, document.data, model, version, bound, contextCall]);
   const jumpThread = (thread: ReviewThread) => { if (thread.outdated) return; restoreScroll.current = false; const targetPath = allFiles.find((file) => fileDiscussions(file, [thread]).length)?.path ?? thread.path; save({ ...state, view: "changes", comparison: "pr", filter: "all", ...(comparison === "pr" && !since ? { collapsed: [...collapsed].filter((path) => path !== targetPath) } : { scope: "", collapsed: [], reviewed: {} }) }); setSearch(""); setCurrentThreadId(thread.id); setPendingThread(thread); };
-  const changeView = (next: "changes" | "comments") => { if (next === view) return; if (next === "comments") { savedScroll.current = sticky.scrollOffset(); setJump(null); setPendingThread(null); } else restoreScroll.current = true; save({ ...state, view: next }); setSelection(null); };
+  const changeView = (next: ReviewView) => { if (next === view) return; if (view === "changes") { savedScroll.current = sticky.scrollOffset(); setJump(null); setPendingThread(null); } else restoreScroll.current = true; save({ ...state, view: next }); setSelection(null); };
   useEffect(() => { if (view !== "changes" || pendingThread || jump || !restoreScroll.current) return; const frame = requestAnimationFrame(() => { restoreScroll.current = false; list.current?.scrollToOffset({ offset: savedScroll.current, animated: false }); }); return () => cancelAnimationFrame(frame); }, [view]);
   const toggleThread = (id: string) => { setCurrentThreadId(id); setOpenedThreads((previous) => { const ids = new Set(previous.version === version ? previous.ids : []); if (!ids.delete(id)) ids.add(id); return { version, ids: [...ids] }; }); };
   const commentProps = (file: ReviewFile) => { const threads = fileDiscussions(file, inlineThreads); return { commentCount: threads.length, onComments: () => { const first = threads.find((thread) => !thread.resolved) ?? threads[0]; if (first) jumpThread(first); } }; };
@@ -259,7 +260,7 @@ export function DiffPanel({ theme, host, params, tab, cleanupInitiallyOpen = fal
   const actions = <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>{bound ? wide ? <>{canSearch ? searchAction : null}{files.length ? collapseAction : null}{refreshAction}{moreAction}{files.length ? indexAction : null}</>
     : !canSearch && !canFilter && !files.length ? moreAction : <>{canSearch && size.width >= 380 ? searchAction : null}{moreAction}{files.length ? indexAction : null}</> : refreshAction}</View>;
   const candidates = catalog.data?.candidates ?? [], pinned = !!catalog.data?.pinned;
-  const pickWorkspace = (workspaceId: string | undefined) => save({ ...latestState.current, workspaceId, prNumber: undefined, comparison: "task", filter: "all", scope: "", reviewed: {}, collapsed: [], view: "changes" });
+  const pickWorkspace = (workspaceId: string | undefined) => save({ ...latestState.current, workspaceId, prNumber: undefined, comparison: "task", filter: "all", scope: "", reviewed: {}, collapsed: [], view: "changes", filesDir: "", filesPath: undefined });
   const workspaceLabel = (w: { root: string; branch: string | null }) => w.branch ?? w.root.split(/[\\/]/).filter(Boolean).at(-1) ?? w.root;
   const shortPath = (root: string) => root.replace(/^\/(Users|home)\/[^/]+/, "~");
   const kindLabel = (w: { root: string; mode: string; worktree?: boolean }) => t(isWorktree(w) ? "workspaceWorktree" : "workspaceCheckout");
@@ -281,7 +282,9 @@ export function DiffPanel({ theme, host, params, tab, cleanupInitiallyOpen = fal
     {pr && header.mode === "pull-request" ? <PullRequestStatus result={currentPrResult} loading={false} error={null} colors={colors} compact={!wide} selectedNumber={pr.number} onSelect={(prNumber) => save({ ...state, prNumber, filter: "all", scope: "", reviewed: {}, collapsed: [] })} workspaceId={bound?.id} maxChecksHeight={size.height} maxChecksWidth={size.width - 24} onCheckFeedback={checkFeedback} hostId={host.id} onPrUpdated={refresh} onCleanup={bound?.mode === "worktree" ? () => setCleanupOpen(true) : undefined} gitAction={git ? <GitActionButton state={git} colors={colors} compact={!wide} variant="secondary" /> : undefined} mergeReady={comparison !== "pr" || document.data?.snapshot.headSha === pr.headSha} />
       : <View style={{ paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 8 }}><Icon name={bound ? "GitBranch" : "FileDiff"} size={14} color={colors.foregroundMuted} /><Text style={{ color: colors.foreground, fontSize: 12, fontWeight: "600", flexShrink: 1, flexGrow: git ? 0 : 1 }} numberOfLines={1}>{bound ? bound.branch ?? t("noBranchYet") : t("codeReview")}</Text>{git ? <><Text numberOfLines={1} style={{ flex: 1, minWidth: 0, color: "blocked" in git.plan ? colors.statusWarning : colors.foregroundMuted, fontSize: 12, lineHeight: 18 }}>{"blocked" in git.plan ? "" : git.summary}</Text><GitActionButton state={git} colors={colors} compact={!wide} variant="primary" /></> : null}{!bound ? actions : null}</View>}
     {header.showPrNotice ? <PullRequestStatus result={currentPrResult} loading={pullRequests.isPending} error={pullRequests.error} colors={colors} compact={!wide} /> : null}
-    {pr ? <ReviewTabs view={view} count={discussions.data?.threads.length} compact={!wide} colors={colors} onChange={changeView} canNavigate={currentThreads.length > 0} onNavigate={(direction) => { const thread = nextDiscussion(currentThreads, currentThreadId, direction); if (thread) jumpThread(thread); }} /> : null}
+    {bound ? <ReviewTabs view={view} tabs={pr ? ["changes", "comments", "files"] : ["changes", "files"]} count={discussions.data?.threads.length} compact={!wide} colors={colors} onChange={changeView} canNavigate={currentThreads.length > 0} onNavigate={(direction) => { const thread = nextDiscussion(currentThreads, currentThreadId, direction); if (thread) jumpThread(thread); }} /> : null}
+    {bound && view === "files" ? <FileBrowser workspace={bound} hostId={host.id} colors={reviewColors} wide={wide} dir={state.filesDir} file={state.filesPath} agentBusy={agentBusy}
+      onNavigate={(next) => save({ ...latestState.current, filesDir: next.dir, filesPath: next.file })} onSaved={refresh} /> : null}
     {pr && bound && view === "comments" ? <View style={{ flex: 1, minHeight: 0 }}>
       {discussions.isPending ? <View style={{ margin: 20, alignItems: "center" }}><Spinner size={18} color={colors.foregroundMuted} /></View> : discussions.error ? <Pressable accessibilityRole="button" onPress={() => void discussions.refetch()} style={{ padding: 16 }}><Text style={{ color: colors.statusDanger, fontSize: 13 }}>{t("prUnavailable")} · {t("retry")}</Text></Pressable> : <Discussions onBatch={batchFeedback} busy={agentBusy} threads={discussions.data?.threads ?? []} resolved={showResolved} onResolved={setShowResolved} onJump={jumpThread} onFeedback={threadFeedback} colors={colors} inlineAvailable={!!inlineAvailable} truncated={!!discussions.data?.truncated} />}
     </View> : null}

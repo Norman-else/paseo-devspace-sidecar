@@ -165,8 +165,8 @@ export function installDevspaceLifecycle(runtime) {
     };
     const body = async (req) => {
       let input = req.body;
-      if (!input) { const chunks = []; let size = 0; for await (const chunk of req) { size += chunk.length; if (size > 16384) throw new Error('Request too large.'); chunks.push(chunk); } input = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
-      if (JSON.stringify(input).length > 16384) throw new Error('Request too large.');
+      if (!input) { const chunks = []; let size = 0; for await (const chunk of req) { size += chunk.length; if (size > 131072) throw new Error('Request too large.'); chunks.push(chunk); } input = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+      if (JSON.stringify(input).length > 131072) throw new Error('Request too large.');
       return input;
     };
     // Review RPCs ride DevSpace's existing connection to this host, so a VPS needs no separate tunnel.

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { mergeOptionsSchema, mergeOutcomeSchema, mergeRequestFields } from "./pr-merge";
 import { pullRequestResultSchema } from "./pull-request";
 import { gitStatusSchema } from "./git-actions";
+import { fileWriteRequestSchema } from "./files";
 import { reviewOptions, discussionSchema, checkDetailSchema, contextSchema, checkpointSchema } from "./review-details";
 
 export const workspaceId = z.string().regex(/^ws_[a-zA-Z0-9_-]+$/);
@@ -78,6 +79,9 @@ export const bridgeRequest = z.discriminatedUnion("op", [
   z.object({ op: z.literal("review"), workspaceId, comparison, ...reviewOptions }),
   z.object({ op: z.literal("pull-requests"), workspaceId }),
   z.object({ op: z.literal("git-status"), workspaceId }),
+  z.object({ op: z.literal("files-list"), workspaceId, path: z.string().max(4096) }),
+  z.object({ op: z.literal("files-read"), workspaceId, path: z.string().max(4096) }),
+  fileWriteRequestSchema.extend({ op: z.literal("files-write"), workspaceId }),
   z.object({ op: z.literal("file"), workspaceId, comparison, path: z.string().min(1), ...reviewOptions }),
   mergeOptionsRpc.input.extend({ op: z.literal("merge-options") }),
   mergePrRpc.input.extend({ op: z.literal("merge-pr") }),

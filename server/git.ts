@@ -13,6 +13,7 @@ import type { MergeRequest } from "../shared/pr-merge";
 import { PullRequests } from "./pull-requests";
 import { GitHubReview } from "./github-review";
 import { Checkpoints } from "./checkpoints";
+import { listDirectory, readWorkspaceFile, writeWorkspaceFile } from "./files";
 import type { ReviewOptions } from "../shared/review-details";
 type Comparison = Snapshot["comparison"];
 
@@ -394,6 +395,9 @@ export class LocalDiff {
     if (input.op === "review") return this.review(input.workspaceId, input.comparison, input);
     if (input.op === "pull-requests") return this.pullRequests(input.workspaceId);
     if (input.op === "git-status") return this.gitStatus(input.workspaceId);
+    if (input.op === "files-list") return this.workspace(input.workspaceId).then(({ root }) => listDirectory(root, input.path));
+    if (input.op === "files-read") return this.workspace(input.workspaceId).then(({ root }) => readWorkspaceFile(root, input.path));
+    if (input.op === "files-write") return this.workspace(input.workspaceId).then(({ root }) => writeWorkspaceFile(root, input.workspaceId, input));
     if (input.op === "merge-options") return this.mergeOptions(input.workspaceId, input.prNumber);
     if (input.op === "merge-pr") return this.mergePr(input);
     if (input.op === "merge-status") return this.mergeStatus(input.workspaceId, input.prNumber, input.requestId);
