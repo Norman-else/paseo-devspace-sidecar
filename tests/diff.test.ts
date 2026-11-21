@@ -12,7 +12,7 @@ import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { LocalDiff } from "../server/git.ts";
 import { remoteRequest, startBridge } from "../server/bridge.ts";
-import { diffLines, isWorktree, sessionWorkspaces, suggestedWorkspace, workspaceEmptyError, type Workspace } from "../shared/diff.ts";
+import { commandDirectory, diffLines, isWorktree, sessionWorkspaces, suggestedWorkspace, workspaceEmptyError, type Workspace } from "../shared/diff.ts";
 import { reviewRows } from "../shared/review.ts";
 import { codeTokens } from "../shared/syntax.ts";
 import { en, zh } from "../shared/messages.ts";
@@ -343,4 +343,23 @@ test("binding prefers the session's latest worktree over later checkout use, and
   assert.deepEqual(sessionWorkspaces([call("ws_ds"), call("ws_main"), call("ws_ds")], all).map((w) => w.id), ["ws_ds", "ws_main"]);
   assert.equal(isWorktree(ws("x", "/r/a", "checkout", true)), true, "git-detected linked worktree");
   assert.equal(isWorktree(ws("x", "/u/.devspace/worktrees/a", "checkout", false)), false, "explicit server flag wins");
+});
+
+test("a cd into another registered repo counts for that repo, and deleted worktrees are skipped", () => {
+  const ws = (id: string, root: string, mode = "checkout", extra: Partial<Workspace> = {}) => ({ id, root, mode, lastUsedAt: "2026-11-21T10:00:00Z", ...extra }) as Workspace;
+  const vault = ws("ws_vault", "/Users/u/PersonalRepos/TheWorld");
+  const naviOld = ws("ws_navi_old", "/Users/u/Infras/Navi", "checkout", { lastUsedAt: "2026-11-20T10:00:00Z" });
+  const navi = ws("ws_navi", "/Users/u/Infras/Navi", "checkout", { lastUsedAt: "2026-11-21T12:00:00Z" });
+  const gone = ws("ws_gone", "/Users/u/.devspace/worktrees/Navi-ead9fc9f", "worktree", { worktree: true, missing: true });
+  const all = [vault, naviOld, navi, gone];
+  const bash = (id: string, command: string) => ({ type: "tool_call", name: "mcp__devspace__bash", status: "completed", detail: { input: { workspace_id: id, command } } });
+  // The real session: work in a worktree that is later deleted, then keep passing the vault's id while cd-ing into Navi.
+  const timeline = [bash("ws_gone", "git status"), bash("ws_vault", "cd /Users/u/Infras/Navi && git log -1"), bash("ws_vault", "cd '/Users/u/Infras/Navi/agent' && ls")];
+  assert.deepEqual(sessionWorkspaces(timeline, all).map((w) => w.id), ["ws_navi"], "cd targets map to the most recent Navi registration; the deleted worktree is skipped");
+  assert.equal(suggestedWorkspace(timeline, all), "ws_navi");
+  assert.equal(suggestedWorkspace([bash("ws_vault", "ls -la")], all), "ws_vault", "without cd the explicit id still counts");
+  assert.equal(suggestedWorkspace([bash("ws_vault", "cd /tmp && ls")], all), "ws_vault", "a cd outside any registered workspace falls back to the id");
+  assert.equal(commandDirectory('cd "/Users/u/My Repo" && ls'), "/Users/u/My Repo");
+  assert.equal(commandDirectory("cd relative/path && ls"), undefined);
+  assert.equal(commandDirectory("git -C /x status"), undefined);
 });

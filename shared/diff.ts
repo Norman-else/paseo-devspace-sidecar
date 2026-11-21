@@ -15,6 +15,8 @@ export const workspaceSchema = z.object({
   // True for linked git worktrees (DevSpace `mode: worktree`, `.claude/worktrees/*`, or any checkout whose `.git` is a file).
   // Optional so older remote sidecars without the field still parse.
   worktree: z.boolean().optional(),
+  // The registration is still active in DevSpace but its folder was removed (for example `git worktree remove`).
+  missing: z.boolean().optional(),
 });
 export type Workspace = z.infer<typeof workspaceSchema>;
 export const workspaceEmptyReason = z.enum(["not_git", "missing", "no_commits", "not_root"]);
@@ -108,9 +110,17 @@ export function diffLines(patch: string): DiffLine[] {
   });
 }
 
+export type DevspaceTarget = { id: string; path?: string };
+/** Leading `cd /abs/path &&` in a DevSpace command: agents often pass one workspace_id and work in another repo. */
+export function commandDirectory(command: unknown): string | undefined {
+  if (typeof command !== "string") return undefined;
+  const match = /^\s*cd\s+(?:"([^"]+)"|'([^']+)'|([^\s;&|]+))\s*(?:&&|;|\n|$)/.exec(command);
+  const path = match?.[1] ?? match?.[2] ?? match?.[3];
+  return path && /^(\/|[A-Za-z]:[\\/])/.test(path) ? path.replace(/[\\/]+$/, "") : undefined;
+}
 /** Only successful DevSpace tool calls may suggest a binding; ordinary prose is not authoritative. */
-export function devspaceWorkspaceIds(timeline: unknown): string[] {
-  const candidates: string[] = [];
+export function devspaceTargets(timeline: unknown): DevspaceTarget[] {
+  const candidates: DevspaceTarget[] = [];
   function visit(value: unknown) {
     if (!value || typeof value !== "object") return;
     const item = value as Record<string, unknown>;
@@ -120,9 +130,10 @@ export function devspaceWorkspaceIds(timeline: unknown): string[] {
       const detail = item.detail as Record<string, unknown> | undefined;
       const input = detail?.input ?? item.input ?? item.arguments;
       const ids = workspaceFields(input);
+      const path = commandDirectory(input && typeof input === "object" ? (input as Record<string, unknown>).command : undefined);
       // Commands can mention other workspaces. Their explicit target wins over any output or prose.
-      if (ids.length) candidates.push(...ids);
-      else if (/open_workspace$/.test(name)) candidates.push(...workspaceFields(detail?.output ?? item.result));
+      if (ids.length) candidates.push(...ids.map((id) => path ? { id, path } : { id }));
+      else if (/open_workspace$/.test(name)) candidates.push(...workspaceFields(detail?.output ?? item.result).map((id) => ({ id })));
       return;
     }
     for (const nested of Object.values(item)) {
@@ -133,6 +144,7 @@ export function devspaceWorkspaceIds(timeline: unknown): string[] {
   visit(timeline);
   return candidates;
 }
+export function devspaceWorkspaceIds(timeline: unknown): string[] { return devspaceTargets(timeline).map((target) => target.id); }
 function workspaceFields(value: unknown): string[] {
   if (typeof value === "string") {
     try { return workspaceFields(JSON.parse(value)); }
@@ -148,15 +160,34 @@ const worktreePath = /[\\/]\.(devspace|claude)[\\/]worktrees[\\/]/;
 export function isWorktree(workspace: Pick<Workspace, "root" | "mode" | "worktree">): boolean {
   return workspace.worktree ?? (workspace.mode === "worktree" || worktreePath.test(workspace.root ?? ""));
 }
-/** Workspaces this session used through DevSpace, most recently used first, limited to ones that still exist. */
+const within = (root: string, path: string) => { const base = root.replace(/[\\/]+$/, ""); return path === base || path.startsWith(base + "/") || path.startsWith(base + "\\"); };
+/** The registered workspace a `cd` target belongs to: the deepest root containing it, most recently used on ties. */
+function workspaceForPath(path: string, workspaces: Workspace[]) {
+  let best: Workspace | undefined;
+  for (const workspace of workspaces) {
+    if (workspace.missing || !within(workspace.root, path)) continue;
+    if (!best || workspace.root.length > best.root.length || workspace.root.length === best.root.length && workspace.lastUsedAt > best.lastUsedAt) best = workspace;
+  }
+  return best;
+}
+/**
+ * Workspaces this session used through DevSpace, most recently used first. A command that starts with `cd` into
+ * another registered workspace counts for that workspace. Registrations whose folder is gone are skipped.
+ */
 export function sessionWorkspaces(timeline: unknown, workspaces: Workspace[]): Workspace[] {
   const byId = new Map(workspaces.map((w) => [w.id, w]));
   const seen = new Set<string>(), result: Workspace[] = [];
-  for (const id of devspaceWorkspaceIds(timeline).reverse()) {
-    const workspace = byId.get(id);
-    if (workspace && !seen.has(id)) { seen.add(id); result.push(workspace); }
+  for (const target of devspaceTargets(timeline).reverse()) {
+    const workspace = (target.path ? workspaceForPath(target.path, workspaces) : undefined) ?? byId.get(target.id);
+    if (workspace && !workspace.missing && !seen.has(workspace.id)) { seen.add(workspace.id); result.push(workspace); }
   }
   return result;
+}
+/** Binding preference: the pin, then worktrees, then checkouts, each most recent first. */
+export function rankedWorkspaces(timeline: unknown, workspaces: Workspace[], pinned?: string): Workspace[] {
+  const used = sessionWorkspaces(timeline, workspaces);
+  const pin = used.filter((w) => w.id === pinned);
+  return [...pin, ...used.filter((w) => w.id !== pinned && isWorktree(w)), ...used.filter((w) => w.id !== pinned && !isWorktree(w))];
 }
 /**
  * The session's latest worktree wins over checkouts, so reading or writing the main checkout after
@@ -164,7 +195,5 @@ export function sessionWorkspaces(timeline: unknown, workspaces: Workspace[]): W
  * latest checkout is used. A pinned workspace wins while the session still uses it.
  */
 export function suggestedWorkspace(timeline: unknown, workspaces: Workspace[], pinned?: string): string | null {
-  const used = sessionWorkspaces(timeline, workspaces);
-  if (pinned && used.some((w) => w.id === pinned)) return pinned;
-  return (used.find(isWorktree) ?? used[0])?.id ?? null;
+  return rankedWorkspaces(timeline, workspaces, pinned)[0]?.id ?? null;
 }

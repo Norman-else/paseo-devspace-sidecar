@@ -5,7 +5,7 @@ import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { z } from "zod";
 import { gitStatusSchema } from "./shared/git-actions";
 import { fileListSchema, fileReadRpc, fileReadSchema, fileWriteResultSchema, fileWriteRpc, filesListRpc } from "./shared/files";
-import { catalogRpc, gitStatusRpc, devspaceWorkspaceIds, fileRpc, fileResultSchema, pullRequestRpc, reviewRpc, reviewSchema, snapshotRpc, snapshotSchema, sessionWorkspaces, suggestedWorkspace, workspaceSchema, workspaceInspectionSchema, type BridgeRequest } from "./shared/diff";
+import { catalogRpc, gitStatusRpc, devspaceWorkspaceIds, fileRpc, fileResultSchema, pullRequestRpc, reviewRpc, reviewSchema, snapshotRpc, snapshotSchema, rankedWorkspaces, sessionWorkspaces, workspaceSchema, workspaceInspectionSchema, type BridgeRequest } from "./shared/diff";
 import { pullRequestResultSchema } from "./shared/pull-request";
 import { loadConfig, configDirectory } from "./server/config";
 import { join } from "node:path";
@@ -45,11 +45,16 @@ export default function contribute(server: PluginServerContext) {
     if (!devspaceWorkspaceIds(timeline).length) return { workspace: null };
     const workspaces = z.array(workspaceSchema).parse(await (await ready).request({ op: "catalog" }));
     const candidates = sessionWorkspaces(timeline, workspaces);
-    const id = suggestedWorkspace(timeline, workspaces, pinnedWorkspaceId);
-    if (!id) return { workspace: null, candidates, emptyReason: "missing" as const };
-    const pinned = id === pinnedWorkspaceId;
-    const inspection = workspaceInspectionSchema.parse(await (await ready).request({ op: "inspect", workspaceId: id }));
-    return inspection.status === "ready" ? { workspace: inspection.workspace, candidates, pinned } : { workspace: null, candidates, pinned, emptyReason: inspection.reason };
+    const ranked = rankedWorkspaces(timeline, workspaces, pinnedWorkspaceId);
+    if (!ranked.length) return { workspace: null, candidates, emptyReason: "missing" as const };
+    // A stale registration (folder deleted, not a Git root) must not hide the next usable workspace.
+    let firstReason: z.infer<typeof workspaceInspectionSchema> | null = null;
+    for (const candidate of ranked.slice(0, 4)) {
+      const inspection = workspaceInspectionSchema.parse(await (await ready).request({ op: "inspect", workspaceId: candidate.id }));
+      if (inspection.status === "ready") return { workspace: inspection.workspace, candidates, pinned: candidate.id === pinnedWorkspaceId };
+      firstReason ??= inspection;
+    }
+    return { workspace: null, candidates, pinned: false, emptyReason: firstReason?.status === "empty" ? firstReason.reason : "missing" as const };
   });
   server.handle(snapshotRpc, async (input) => snapshotSchema.parse(await (await ready).request({ op: "snapshot", ...input })));
   server.handle(fileRpc, async (input) => fileResultSchema.parse(await (await ready).request({ op: "file", ...input })));

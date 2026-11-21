@@ -74,10 +74,10 @@ export class LocalDiff {
     let branch: string | null = null;
     try { branch = (await git(row.root, ["symbolic-ref", "--short", "HEAD"])).trim(); } catch { /* detached or unavailable */ }
     // A linked worktree has a `.git` file pointing at the main repository, wherever it lives.
-    let linked = false;
-    try { linked = (await lstat(join(row.root, ".git"))).isFile(); } catch { /* missing root */ }
+    let linked = false, missing = false;
+    try { linked = (await lstat(join(row.root, ".git"))).isFile(); } catch { missing = !(await lstat(row.root).then(() => true, () => false)); }
     const worktree = row.mode === "worktree" || linked || isWorktree({ root: row.root, mode: row.mode });
-    return { id: row.id, root: row.root, sourceRoot: row.source_root, mode: row.mode, baseSha: row.base_sha, branch, lastUsedAt: row.last_used_at, worktree };
+    return { id: row.id, root: row.root, sourceRoot: row.source_root, mode: row.mode, baseSha: row.base_sha, branch, lastUsedAt: row.last_used_at, worktree, ...(missing ? { missing } : {}) };
   }
   async catalog(): Promise<Workspace[]> { return Promise.all(this.rows().map((row) => this.describe(row))); }
   private async inspectWorkspace(id: string): Promise<{ status: "ready"; workspace: Workspace; root: string } | { status: "empty"; reason: WorkspaceEmptyReason }> {
