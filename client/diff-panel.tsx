@@ -38,12 +38,12 @@ import { ContextGap } from "./context-gap";
 import { codeReviewPalette } from "../shared/appearance";
 import { fileDiscussions, nextDiscussion } from "../shared/comment-navigation";
 
-const stateSchema = z.object({ comparison: comparisonSchema, scope: z.string().default(""), collapsed: z.array(z.string()).default([]), reviewed: z.record(z.string(), z.string()).default({}), indexVisible: z.boolean().default(true), indexWidth: z.number().min(140).max(520).nullable().default(null), prNumber: z.number().int().optional(), filter: z.enum(["all", "unreviewed", "since"]).default("all"), points: z.record(z.string(), checkpointSchema).default({}), view: z.enum(["changes", "comments", "files"]).default("changes"), filesDir: z.string().default(""), filesPath: z.string().optional(), workspaceId: z.string().optional() });
+const stateSchema = z.object({ comparison: comparisonSchema, scope: z.string().default(""), collapsed: z.array(z.string()).default([]), reviewed: z.record(z.string(), z.string()).default({}), indexVisible: z.boolean().default(true), indexWidth: z.number().min(140).max(520).nullable().default(null), prNumber: z.number().int().optional(), filter: z.enum(["all", "unreviewed", "since"]).default("all"), points: z.record(z.string(), checkpointSchema).default({}), view: z.enum(["changes", "comments", "files"]).default("changes"), filesDir: z.string().default(""), filesPath: z.string().optional(), preferDirect: z.boolean().default(false), workspaceId: z.string().optional() });
 type Jump = { path: string; key?: string };
 export function DiffPanel({ theme, host, params, tab, cleanupInitiallyOpen = false }: PluginAgentPanelProps & { cleanupInitiallyOpen?: boolean }) {
   const { t, translateBackend, locale } = useMessages(), toast = useToast();
   const typography = useCodeAppearance();
-  const [state, save] = useTabState(tab, stateSchema, { comparison: "task" as const, scope: "", collapsed: [] as string[], reviewed: {} as Record<string, string>, indexVisible: true, indexWidth: null as number | null, filter: "all" as const, points: {}, view: "changes" as const, filesDir: "" });
+  const [state, save] = useTabState(tab, stateSchema, { comparison: "task" as const, scope: "", collapsed: [] as string[], reviewed: {} as Record<string, string>, indexVisible: true, indexWidth: null as number | null, filter: "all" as const, points: {}, view: "changes" as const, filesDir: "", preferDirect: false });
   const latestState = useRef(state); latestState.current = state;
   const [dragWidth, setDragWidth] = useState<number | null>(null), [size, setSize] = useState({ width: 700, height: 700 });
   const [search, setSearch] = useState(""), [searchOpen, setSearchOpen] = useState(false), [searchType, setSearchType] = useState<"files" | "code">("files");
@@ -106,7 +106,7 @@ export function DiffPanel({ theme, host, params, tab, cleanupInitiallyOpen = fal
   const reviewed = useMemo(() => state.scope === scope ? state.reviewed : {}, [state.scope, state.reviewed, scope]);
   const allFiles = useMemo(() => (document.data?.files ?? []).map((file) => overrides[`${version}:${file.path}`] ?? file), [document.data, overrides, version]);
   const files = useMemo(() => allFiles.filter((file) => (!search || searchType !== "files" || file.path.toLowerCase().includes(search.toLowerCase())) && (state.filter !== "unreviewed" || !file.hash || reviewed[file.path] !== file.hash)), [allFiles, search, searchType, state.filter, reviewed]);
-  const git = useGitActions({ workspace: bound, agentId: params.agentId, pr: prPresence, openPr: openPrs[0]?.number, revision: snapshot.data?.revision, hostId: host.id, onDraft: setDraft, onAgentFinished: () => refresh() });
+  const git = useGitActions({ workspace: bound, agentId: params.agentId, pr: prPresence, openPr: openPrs[0]?.number, revision: snapshot.data?.revision, hostId: host.id, preferDirect: state.preferDirect, onDraft: setDraft, onAgentFinished: () => refresh(), onChoose: (direct) => { if (direct !== latestState.current.preferDirect) save({ ...latestState.current, preferDirect: direct }); } });
   const wide = size.width >= 560;
   const maxIndexWidth = Math.min(520, Math.max(140, size.width - 280 - DIVIDER_WIDTH));
   const indexShown = wide && state.indexVisible && files.length > 0;

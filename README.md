@@ -83,10 +83,12 @@ When the workspace has work that is not on GitHub yet, Desk offers the next step
 | Commits not pushed, no open PR | Push & create PR | Push |
 | Commits not pushed, open PR | Push | |
 | Pushed, ahead of the base branch, no PR | Create PR | |
-| Work on the default branch or a detached HEAD | New branch & create PR | New branch & commit |
+| Uncommitted changes on the default branch | New branch & create PR | New branch & commit, Commit & push to master, Commit to master |
+| Unpushed commits on the default branch | New branch & create PR | Push to master |
+| Work on a detached HEAD | New branch & create PR | New branch & commit |
 | Merge conflicts | none; the bar asks to resolve them first | |
 
-PR creation is offered only when GitHub reports no open PR for the branch, and push only when the branch has a remote. Nothing is offered once everything is committed, pushed and has a PR.
+On the default branch, the path chosen last in the panel leads: after a direct push to master, **Commit & push to master** becomes the main action until a new-branch action is chosen again. Direct pushes pull with rebase first, stop on conflicts, and go out without a PR (the branch's CI still runs). PR creation is offered only when GitHub reports no open PR for the branch, and push only when the branch has a remote. Nothing is offered once everything is committed, pushed and has a PR.
 
 Choosing an action opens a confirmation with editable instructions and the full prompt, then sends it to the session's agent. The agent runs the Git and `gh` commands through DevSpace with the bound `workspace_id`, writes the commit message and PR description itself from the diff and the conversation, follows the repository's conventions and PR template, never pushes to the base branch, and does not merge or force-push. Buttons are disabled while the agent is running; Git and PR status refresh when its turn ends. Reading Git status is read-only; the sidecar itself never commits or pushes.
 

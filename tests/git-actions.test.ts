@@ -25,10 +25,15 @@ test("Desk offers the next Git step for each branch state", () => {
   assert.equal(pick(status({ aheadOfBase: 1 }), "done"), null);
   assert.deepEqual(pick(status({ aheadOfBase: 1, changed: 2 }), "done"), ["commit", "commit-push"], "new work after the merge can still be committed");
   // Never commit onto the base branch or a detached HEAD without branching first.
-  assert.deepEqual(pick(status({ branch: "master", upstream: "origin/master", changed: 2 }), "none"), ["branch-pr", "branch-commit"]);
+  assert.deepEqual(pick(status({ branch: "master", upstream: "origin/master", changed: 2 }), "none"), ["branch-pr", "branch-commit", "commit-push-base", "commit-base"], "a branch and PR lead by default; direct commits are offered");
   assert.deepEqual(pick(status({ branch: null, upstream: null, changed: 1 }), "unknown"), ["branch-pr", "branch-commit"]);
   assert.deepEqual(pick(status({ branch: null, upstream: null, aheadOfBase: 2 }), "unknown"), ["branch-pr"]);
   assert.equal(pick(status({ branch: "master", upstream: "origin/master", behind: 1 }), "none"), null);
+  const onMaster = status({ branch: "master", upstream: "origin/master", changed: 2 });
+  const direct = planGitActions(onMaster, "none", { preferDirect: true });
+  assert.deepEqual(direct && "primary" in direct ? [direct.primary, ...direct.alternatives] : null, ["commit-push-base", "commit-base", "branch-pr", "branch-commit"], "the last choice in the panel leads");
+  assert.deepEqual(pick(status({ branch: "master", upstream: "origin/master", ahead: 2, aheadOfBase: 2 }), "none"), ["branch-pr", "push-base"]);
+  assert.deepEqual(pick(status({ branch: "master", upstream: "origin/master", changed: 1, remote: null }), "unknown"), ["branch-commit", "commit-base"], "without a remote nothing is pushed");
   assert.deepEqual(planGitActions(status({ changed: 2, conflicted: 1 }), "none"), { blocked: "conflicts", unpushed: 0 });
 });
 
@@ -48,6 +53,12 @@ test("the agent prompt names the workspace and only the requested steps", () => 
   assert.match(branch, /git switch -c/);
   assert.doesNotMatch(branch, /Stage only/, "nothing to commit when the work is already committed");
   assert.match(gitActionPrompt("push", status({ ahead: 1 }), workspace, 42), /open pull request #42/);
+  const toMaster = gitActionPrompt("commit-push-base", status({ branch: "master", upstream: "origin/master", changed: 2 }), workspace);
+  assert.match(toMaster, /git pull --rebase origin master/); assert.match(toMaster, /git push origin master/); assert.match(toMaster, /without a pull request/);
+  assert.doesNotMatch(toMaster, /push to master\./, "the usual ban on pushing to the base branch is dropped");
+  assert.doesNotMatch(toMaster, /gh pr create/);
+  const commitOnMaster = gitActionPrompt("commit-base", status({ branch: "master", upstream: "origin/master", changed: 2 }), workspace);
+  assert.doesNotMatch(commitOnMaster, /git push/); assert.match(commitOnMaster, /Do not push\./);
 });
 
 test("porcelain v2 parsing counts files, renames, conflicts and a deleted upstream", () => {

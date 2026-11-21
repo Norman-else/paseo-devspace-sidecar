@@ -5,25 +5,25 @@ import { useQuery } from "@tanstack/react-query";
 import { useAgent, useRpc } from "@getpaseo/plugin/client";
 import { Icon } from "@getpaseo/plugin/client/ui";
 import { gitStatusRpc, isWorktree, type Workspace } from "../shared/diff";
-import { gitActionPrompt, planGitActions, type GitAction, type GitPlan, type PrPresence } from "../shared/git-actions";
+import { gitActionPrompt, isDirectAction, planGitActions, type GitAction, type GitPlan, type PrPresence } from "../shared/git-actions";
 import type { FeedbackDraft } from "./feedback-composer";
 import { ReviewMenu } from "./review-menu";
 import type { Colors } from "./review-ui";
 import { useMessages } from "./messages";
 
-const labels = { "commit": "gitActionCommit", "commit-push": "gitActionCommitPush", "commit-pr": "gitActionCommitPr", "push": "gitActionPush", "push-pr": "gitActionPushPr", "pr": "gitActionPr", "branch-commit": "gitActionBranchCommit", "branch-pr": "gitActionBranchPr" } as const;
-const helps = { "commit": "gitHelpCommit", "commit-push": "gitHelpCommitPush", "commit-pr": "gitHelpCommitPr", "push": "gitHelpPush", "push-pr": "gitHelpPushPr", "pr": "gitHelpPr", "branch-commit": "gitHelpBranchCommit", "branch-pr": "gitHelpBranchPr" } as const;
+const labels = { "commit": "gitActionCommit", "commit-push": "gitActionCommitPush", "commit-pr": "gitActionCommitPr", "push": "gitActionPush", "push-pr": "gitActionPushPr", "pr": "gitActionPr", "branch-commit": "gitActionBranchCommit", "branch-pr": "gitActionBranchPr", "commit-base": "gitActionCommitBase", "commit-push-base": "gitActionCommitPushBase", "push-base": "gitActionPushBase" } as const;
+const helps = { "commit": "gitHelpCommit", "commit-push": "gitHelpCommitPush", "commit-pr": "gitHelpCommitPr", "push": "gitHelpPush", "push-pr": "gitHelpPushPr", "pr": "gitHelpPr", "branch-commit": "gitHelpBranchCommit", "branch-pr": "gitHelpBranchPr", "commit-base": "gitHelpCommitBase", "commit-push-base": "gitHelpCommitPushBase", "push-base": "gitHelpPushBase" } as const;
 const shortPath = (root: string) => root.replace(/^\/(Users|home)\/[^/]+/, "~");
 
-export type GitActionsState = { plan: GitPlan; summary: string; busy: boolean; start(action: GitAction): void };
+export type GitActionsState = { plan: GitPlan; summary: string; busy: boolean; base: string; start(action: GitAction): void };
 
 /**
  * Decides which Commit / Push / Create PR actions fit the bound workspace right now.
  * An action is handed to the session's agent, which writes the commit message and PR description itself.
  */
-export function useGitActions({ workspace, agentId, pr, openPr, revision, hostId, onDraft, onAgentFinished }: {
-  workspace: Workspace | null | undefined; agentId: string; pr: PrPresence; openPr?: number; revision?: string; hostId: string;
-  onDraft(draft: FeedbackDraft): void; onAgentFinished(): void;
+export function useGitActions({ workspace, agentId, pr, openPr, revision, hostId, preferDirect = false, onDraft, onAgentFinished, onChoose }: {
+  workspace: Workspace | null | undefined; agentId: string; pr: PrPresence; openPr?: number; revision?: string; hostId: string; preferDirect?: boolean;
+  onDraft(draft: FeedbackDraft): void; onAgentFinished(): void; onChoose?(direct: boolean): void;
 }): GitActionsState | null {
   const { t } = useMessages();
   const statusCall = useRpc(gitStatusRpc);
@@ -38,7 +38,8 @@ export function useGitActions({ workspace, agentId, pr, openPr, revision, hostId
   }, [agentStatus]);
   const s = status.data;
   if (!workspace || !s) return null;
-  const plan = planGitActions(s, pr);
+  const plan = planGitActions(s, pr, { preferDirect });
+  const base = s.defaultBranch ?? "main";
   if (!plan) return null;
   const parts: string[] = [];
   if (s.branch && s.branch === s.defaultBranch) parts.push(t("gitOnDefault", { branch: s.branch }));
@@ -48,11 +49,12 @@ export function useGitActions({ workspace, agentId, pr, openPr, revision, hostId
   if (pr === "none" && s.branch && s.branch !== s.defaultBranch) parts.push(t("gitNoPr"));
   const summary = "blocked" in plan ? t("gitConflicts") : busy ? t("gitAgentBusy") : parts.join(" · ");
   const start = (action: GitAction) => {
+    if (s.branch && s.branch === s.defaultBranch) onChoose?.(isDirectAction(action));
     const prompt = gitActionPrompt(action, s, { id: workspace.id, root: workspace.root, worktree: isWorktree(workspace) }, openPr);
-    onDraft({ title: t(labels[action]), intent: "git", instruction: t(helps[action]), context: prompt,
+    onDraft({ title: t(labels[action], { branch: base }), intent: "git", instruction: t(helps[action], { branch: base }), context: prompt,
       attachment: { source: `${s.branch ?? t("gitDetached")} · ${shortPath(workspace.root)}`, preview: { kind: "text", text: prompt } } });
   };
-  return { plan, summary, busy, start };
+  return { plan, summary, busy, base, start };
 }
 
 /**
@@ -62,19 +64,19 @@ export function useGitActions({ workspace, agentId, pr, openPr, revision, hostId
 export function GitActionButton({ state, colors, compact, variant }: { state: GitActionsState; colors: Colors; compact: boolean; variant: "primary" | "secondary" }) {
   const { t } = useMessages();
   const [hover, setHover] = useState(false);
-  const { plan, busy } = state;
+  const { plan, busy, base } = state;
   if ("blocked" in plan) return <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 }}><Icon name="TriangleAlert" size={13} color={colors.statusWarning} /><Text numberOfLines={1} style={{ color: colors.statusWarning, fontSize: 12, lineHeight: 18 }}>{t("gitConflicts")}</Text></View>;
   const primary = variant === "primary" && !busy;
   const foreground = busy ? colors.foregroundMuted : primary ? colors.accentForeground : colors.foreground;
   const background = primary ? colors.accent : hover ? colors.surface2 : "transparent", border = primary ? colors.accent : colors.border;
-  const height = compact ? 32 : 28, split = plan.alternatives.length > 0, hint = busy ? t("gitAgentBusy") : t(helps[plan.primary]);
+  const height = compact ? 32 : 28, split = plan.alternatives.length > 0, hint = busy ? t("gitAgentBusy") : t(helps[plan.primary], { branch: base });
   return <View testID="devspace-git-action" style={{ flexDirection: "row", alignItems: "center", flexShrink: 0, zIndex: 20 }}>
-    <Pressable accessibilityRole="button" accessibilityLabel={t(labels[plan.primary])} accessibilityHint={hint} accessibilityState={{ disabled: busy }} disabled={busy} onPress={() => state.start(plan.primary)}
+    <Pressable accessibilityRole="button" accessibilityLabel={t(labels[plan.primary], { branch: base })} accessibilityHint={hint} accessibilityState={{ disabled: busy }} disabled={busy} onPress={() => state.start(plan.primary)}
       onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)} style={{ minHeight: compact ? 44 : 28, justifyContent: "center" }}>
       {({ pressed }) => <View style={{ height, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: border, backgroundColor: background, opacity: pressed ? 0.75 : busy ? 0.7 : 1,
         borderTopLeftRadius: 4, borderBottomLeftRadius: 4, borderTopRightRadius: split ? 0 : 4, borderBottomRightRadius: split ? 0 : 4, borderRightWidth: split ? 0 : 1 }}>
         {busy ? <Spinner size={12} color={foreground} /> : <Icon name="Sparkles" size={12} color={foreground} />}
-        <Text numberOfLines={1} style={{ color: foreground, fontSize: 11, lineHeight: 16, fontWeight: "600" }}>{t(labels[plan.primary])}</Text>
+        <Text numberOfLines={1} style={{ color: foreground, fontSize: 11, lineHeight: 16, fontWeight: "600" }}>{t(labels[plan.primary], { branch: base })}</Text>
       </View>}
     </Pressable>
     {split ? <ReviewMenu title={t("gitActionsTitle")} colors={colors} touch={compact} align="right" width={320} trigger={({ open, toggle }) => <Pressable accessibilityRole="button" accessibilityLabel={t("gitActionsTitle")} accessibilityState={{ expanded: open, disabled: busy }} aria-expanded={open} disabled={busy} onPress={toggle} style={{ minHeight: compact ? 44 : 28, justifyContent: "center" }}>
@@ -82,6 +84,6 @@ export function GitActionButton({ state, colors, compact, variant }: { state: Gi
         <View pointerEvents="none" style={{ position: "absolute", left: 0, top: 5, bottom: 5, width: 1, backgroundColor: primary ? foreground : colors.border, opacity: primary ? 0.25 : 1 }} />
         <Icon name="ChevronDown" size={13} color={foreground} />
       </View>
-    </Pressable>} options={[plan.primary, ...plan.alternatives].map((action) => ({ id: action, label: t(labels[action]), description: t(helps[action]), onSelect: () => state.start(action) }))} /> : null}
+    </Pressable>} options={[plan.primary, ...plan.alternatives].map((action, index) => ({ id: action, label: t(labels[action], { branch: base }), description: t(helps[action], { branch: base }), separatorBefore: index > 0 && isDirectAction(action) !== isDirectAction([plan.primary, ...plan.alternatives][index - 1]), onSelect: () => state.start(action) }))} /> : null}
   </View>;
 }

@@ -13,7 +13,9 @@ export const gitStatusSchema = z.object({
 });
 export type GitStatus = z.infer<typeof gitStatusSchema>;
 
-export const gitActions = ["commit", "commit-push", "commit-pr", "push", "push-pr", "pr", "branch-commit", "branch-pr"] as const;
+export const gitActions = ["commit", "commit-push", "commit-pr", "push", "push-pr", "pr", "branch-commit", "branch-pr", "commit-base", "commit-push-base", "push-base"] as const;
+/** Actions that commit or push straight onto the default branch, for sessions that deliberately work on it. */
+export const isDirectAction = (action: GitAction) => action.endsWith("-base");
 export type GitAction = typeof gitActions[number];
 /**
  * "open": an open or draft PR exists for the branch. "done": a merged or closed PR already contains the current HEAD,
@@ -30,13 +32,22 @@ export function unpushedCommits(s: GitStatus) { return s.upstream ? s.ahead : s.
  * Pick the actions that make sense now. Nothing is offered when the branch is committed, pushed and has a PR.
  * A detached HEAD or the default branch always gets a new branch first, so nothing is pushed to the base branch.
  */
-export function planGitActions(s: GitStatus, pr: PrPresence): GitPlan | null {
+export function planGitActions(s: GitStatus, pr: PrPresence, options: { preferDirect?: boolean } = {}): GitPlan | null {
   const unpushed = unpushedCommits(s);
   if (s.conflicted) return { blocked: "conflicts", unpushed };
   const canPush = !!s.remote;
-  if (!s.branch || s.branch === s.defaultBranch) {
+  if (!s.branch) {
     if (s.changed) return canPush && s.defaultBranch ? { primary: "branch-pr", alternatives: ["branch-commit"], unpushed } : { primary: "branch-commit", alternatives: [], unpushed };
     return s.aheadOfBase && canPush && s.defaultBranch ? { primary: "branch-pr", alternatives: [], unpushed } : null;
+  }
+  if (s.branch === s.defaultBranch) {
+    // On the default branch both paths are offered: a new branch with a PR, or committing/pushing it directly.
+    // Which one leads follows the last choice made in this panel, so a session that works on master stays one click.
+    let viaBranch: GitAction[] = [], direct: GitAction[] = [];
+    if (s.changed) { viaBranch = canPush ? ["branch-pr", "branch-commit"] : ["branch-commit"]; direct = canPush ? ["commit-push-base", "commit-base"] : ["commit-base"]; }
+    else if (unpushed && canPush) { viaBranch = ["branch-pr"]; direct = ["push-base"]; }
+    const ordered = options.preferDirect ? [...direct, ...viaBranch] : [...viaBranch, ...direct];
+    return ordered.length ? { primary: ordered[0], alternatives: ordered.slice(1), unpushed } : null;
   }
   const canPr = canPush && !!s.defaultBranch && pr === "none";
   if (s.changed) {
@@ -58,19 +69,24 @@ const titles: Record<GitAction, string> = {
   "pr": "Open a pull request for this branch.",
   "branch-commit": "Move this work onto a new branch and commit it. Do not push.",
   "branch-pr": "Move this work onto a new branch, commit it, push it and open a pull request.",
+  "commit-base": "Commit this task's changes directly on the default branch. Do not push.",
+  "commit-push-base": "Commit this task's changes directly on the default branch and push it.",
+  "push-base": "Push the default branch's unpushed commits.",
 };
 
 /** The instructions sent to the session's agent. The agent writes the commit message and PR description itself. */
 export function gitActionPrompt(action: GitAction, s: GitStatus, workspace: { id: string; root: string; worktree: boolean }, openPr?: number): string {
   const remote = s.remote ?? "origin", base = s.defaultBranch ?? "the default branch", unpushed = unpushedCommits(s);
-  const branch = action.startsWith("branch-"), commit = branch ? s.changed > 0 : action.startsWith("commit"), push = action !== "commit" && action !== "branch-commit", pr = action.endsWith("-pr") || action === "pr";
+  const direct = isDirectAction(action), branch = action.startsWith("branch-"), commit = branch ? s.changed > 0 : action.startsWith("commit");
+  const push = action !== "commit" && action !== "branch-commit" && action !== "commit-base", pr = action.endsWith("-pr") || action === "pr";
   const state = [`${s.changed} changed file${s.changed === 1 ? "" : "s"}`, `${unpushed} unpushed commit${unpushed === 1 ? "" : "s"}`];
   if (s.behind) state.push(`${s.behind} new commit${s.behind === 1 ? "" : "s"} on ${s.upstream}`);
   state.push(openPr ? `open pull request #${openPr}` : "no open pull request");
   const steps: string[] = [];
   if (branch) steps.push("Create a new branch from the current HEAD with `git switch -c <name>`. Name it after the ticket if this conversation or the work names one (for example PSOS-1234), otherwise use a short kebab-case summary. Uncommitted changes move with it.");
   if (commit) steps.push("Review `git status` and `git diff`. Stage only the changes that belong to this task. Leave out unrelated, generated or secret files (.env, credentials) and tell me which ones you left out. Write the commit message yourself from the diff and from what we did in this conversation, following the repository's convention: check `git log --oneline -15` and any CONTRIBUTING, AGENTS.md or CLAUDE.md rules. Split into several commits only when the changes are clearly unrelated.");
-  if (push) steps.push(`Push the branch to ${remote} and set its upstream with \`git push -u ${remote} HEAD\`. If the push is rejected because the remote branch moved, rebase onto it and push again once. If that hits conflicts, stop and ask me.`);
+  if (push && direct) steps.push(`Bring ${base} up to date first with \`git pull --rebase ${remote} ${base}\`, run the relevant tests again if that pulled anything in, then push with \`git push ${remote} ${base}\`. If the rebase hits conflicts, stop and ask me. This goes to ${base} without a pull request and starts its CI pipeline.`);
+  else if (push) steps.push(`Push the branch to ${remote} and set its upstream with \`git push -u ${remote} HEAD\`. If the push is rejected because the remote branch moved, rebase onto it and push again once. If that hits conflicts, stop and ask me.`);
   if (pr) steps.push(`Open a pull request into ${base} with \`gh pr create\`. Write the title and description yourself from the commits, the diff and this conversation: what changed and why, how it was tested, and what reviewers should look at. Use the repository's pull request template if it has one, and reference the ticket if there is one.`);
   return [
     `[DevSpace Desk] ${titles[action]}`,
@@ -82,6 +98,6 @@ export function gitActionPrompt(action: GitAction, s: GitStatus, workspace: { id
     `Run every git and gh command through the DevSpace MCP tools with workspace_id ${workspace.id}. Do not touch other checkouts or branches.`,
     ...steps.map((step, index) => `${index + 1}. ${step}`),
     "",
-    `Do not merge, force-push, rewrite pushed history, or push to ${base}.${push ? "" : " Do not push."} When you are done, reply with the commit hash(es)${pr ? " and the pull request link" : ""}.`,
+    `${direct ? "Do not force-push or rewrite pushed history." : `Do not merge, force-push, rewrite pushed history, or push to ${base}.`}${push ? "" : " Do not push."} When you are done, reply with the commit hash(es)${pr ? " and the pull request link" : ""}.`,
   ].join("\n");
 }
