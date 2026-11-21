@@ -54,7 +54,7 @@ export function FileBrowser({ workspace, hostId, colors, wide, dir, file, agentB
 
   const rootName = workspace.root.split(/[\\/]/).filter(Boolean).at(-1) ?? workspace.root;
   const listPane = <View style={{ flex: wide ? undefined : 1, width: wide ? 260 : undefined, minHeight: 0, borderRightWidth: wide ? 1 : 0, borderColor: colors.border }}>
-    <Breadcrumb root={rootName} dir={dir} colors={colors} onPress={(path) => go({ dir: path, file })} />
+    {dir ? <Breadcrumb root={rootName} dir={dir} colors={colors} onPress={(path) => go({ dir: path, file })} /> : null}
     {list.isPending ? <View style={{ padding: 16, alignItems: "center" }}><Spinner size={18} color={colors.foregroundMuted} /></View>
       : list.error ? <Text style={{ padding: 12, color: colors.statusDanger, fontSize: 12 }}>{translateBackend(list.error.message)}</Text>
       : <FlatList<FileEntry> data={list.data?.entries ?? []} keyExtractor={(entry) => entry.path} style={{ flex: 1 }} initialNumToRender={60}
@@ -103,7 +103,7 @@ export function FileBrowser({ workspace, hostId, colors, wide, dir, file, agentB
 
 function Breadcrumb({ root, dir, colors, onPress }: { root: string; dir: string; colors: Colors; onPress(path: string): void }) {
   const parts = dir ? dir.split("/") : [];
-  return <View style={{ minHeight: 34, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 2, borderBottomWidth: 1, borderColor: colors.border }}>
+  return <View style={{ minHeight: 34, paddingHorizontal: 10, paddingVertical: 6, flexDirection: "row", alignItems: "center", alignContent: "center", flexWrap: "wrap", gap: 2, borderBottomWidth: 1, borderColor: colors.border }}>
     {[root, ...parts].map((part, index) => <View key={index} style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
       {index ? <Icon name="ChevronRight" size={11} color={colors.foregroundMuted} /> : null}
       <Pressable accessibilityRole="link" onPress={() => onPress(parts.slice(0, index).join("/"))}><Text numberOfLines={1} style={{ color: index === parts.length ? colors.foreground : colors.foregroundMuted, fontSize: 12, fontWeight: index === parts.length ? "500" : "400" }}>{part}</Text></Pressable>
