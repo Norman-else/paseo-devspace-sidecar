@@ -7,7 +7,7 @@ import type { Colors } from "./review-ui";
 import { useMessages } from "./messages";
 import { useCodeAppearance } from "./use-code-appearance";
 import { codeReviewPalette } from "../shared/appearance";
-import { codeTokens } from "../shared/syntax";
+import { codeTokens, syntaxPalette } from "../shared/syntax";
 
 type Attachment = {
   path?: string; location?: string; source: string; revision?: string; capturedAt?: string;
@@ -80,7 +80,7 @@ function CodePreview({ lines, path, colors }: { lines: { number: number; text: s
     return lines.map((line) => ({ ...line, tokens: codeTokens(line.text.slice(indent), path, state) }));
   }, [lines, path]);
   const numberWidth = Math.max(36, String(Math.max(0, ...lines.map((line) => line.number))).length * typography.characterWidth);
-  const syntax = { plain: colors.foreground, comment: colors.foregroundMuted, string: colors.statusSuccess, keyword: colors.accent, number: colors.statusWarning, type: colors.statusWarning, function: colors.accent };
+  const syntax = syntaxPalette(palette.dark, colors.foreground);
   return <View style={{ paddingVertical: 12, backgroundColor: palette.background }}>
     {tokens.map((line) => <View key={line.number} style={{ flexDirection: "row", paddingHorizontal: 12, gap: 12 }}>
       <Text style={{ width: numberWidth, textAlign: "right", color: colors.foregroundMuted, fontFamily: typography.fontFamily, fontSize: typography.fontSize - 2, lineHeight: typography.lineHeight }}>{line.number}</Text>

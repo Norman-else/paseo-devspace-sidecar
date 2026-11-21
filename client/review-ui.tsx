@@ -5,6 +5,7 @@ import type { PluginAgentPanelProps } from "@getpaseo/plugin/client";
 import type { ReviewFile } from "../shared/diff";
 import type { ReviewRow } from "../shared/review";
 import { useMessages } from "./messages";
+import { syntaxPalette } from "../shared/syntax";
 import { codeReviewPalette, diffBackground, SELECTION_HANDLE_WIDTH, type CodeAppearance } from "../shared/appearance";
 import { codeSelectionProps, selectionHandleProps } from "./web";
 import type { LineSelection } from "../shared/selection";
@@ -74,7 +75,7 @@ export function CodeLine({ row, colors, typography, onHeight, selection, onSelec
   const selected = selection?.path === row.path && number !== undefined && number >= Math.min(selection.start, selection.end) && number <= Math.max(selection.start, selection.end);
   const handleActive = hovered || selected && (number === selection?.start || number === selection?.end);
   const tone = add ? reviewPalette.addedMarker : remove ? reviewPalette.removedMarker : colors.foregroundMuted;
-  const palette = { plain: colors.foreground, comment: colors.foregroundMuted, string: colors.statusSuccess, keyword: colors.accent, number: colors.statusWarning, type: colors.statusWarning, function: colors.accent };
+  const palette = syntaxPalette(reviewPalette.dark, colors.foreground);
   const handleSide = line.next === undefined ? "old" : "new", handleLine = (line.next ?? line.old)!;
   return <View {...codeSelectionProps(selectionScope, row.path, line.old, line.next)} onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)} onLayout={(event) => onHeight(event.nativeEvent.layout.height)} style={{ minHeight: lineHeight, flexDirection: "row", alignItems: "flex-start", paddingRight: 8,
     backgroundColor: selected ? diffBackground(colors.accent, reviewPalette.background) : add ? reviewPalette.added : remove ? reviewPalette.removed : reviewPalette.background, borderLeftWidth: 3, borderLeftColor: selected ? colors.accent : match ? colors.statusWarning : add || remove ? tone : "transparent" }}>
