@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
-import { View, type LayoutChangeEvent } from "react-native";
+import { Platform, View, type LayoutChangeEvent } from "react-native";
 
-// Also keep overlaid native scroll indicators away from header actions.
-export const SCROLLBAR_CLEARANCE = 8;
+// Native scroll indicators overlay content, so keep them off header actions. Web reserves a real gutter instead.
+export const SCROLLBAR_CLEARANCE = Platform.OS === "web" ? 0 : 8;
 export function useScrollContentWidth(viewportWidth: number) {
   const [measured, setMeasured] = useState<{ viewportWidth: number; width: number } | null>(null);
   const onLayout = useCallback((event: LayoutChangeEvent) => {

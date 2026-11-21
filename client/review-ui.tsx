@@ -6,6 +6,7 @@ import type { ReviewFile } from "../shared/diff";
 import type { ReviewRow } from "../shared/review";
 import { useMessages } from "./messages";
 import { syntaxPalette } from "../shared/syntax";
+import { FileTypeIcon } from "./file-icon";
 import { codeReviewPalette, diffBackground, SELECTION_HANDLE_WIDTH, type CodeAppearance } from "../shared/appearance";
 import { codeSelectionProps, selectionHandleProps } from "./web";
 import type { LineSelection } from "../shared/selection";
@@ -39,7 +40,7 @@ export function FileHeader({ file, width, colors, collapsed, reviewed, onToggle,
     <Pressable accessibilityRole="button" accessibilityLabel={t(collapsed ? "expandFile" : "collapseFile", { path: file.path })} accessibilityState={{ expanded: !collapsed }} onPress={onToggle}
       style={{ flex: 1, minWidth: 0, height: 34, flexDirection: "row", gap: 6, alignItems: "center", paddingLeft: 8, paddingRight: 8 }}>
       <Icon name={collapsed ? "ChevronRight" : "ChevronDown"} size={12} color={colors.foregroundMuted} />
-      <Icon name="FileCode" size={13} color={colors.foregroundMuted} />
+      <FileTypeIcon path={file.path} size={14} colors={colors} />
       <Text numberOfLines={1} ellipsizeMode="middle" style={[fileNameTypography, { color: reviewed ? colors.foregroundMuted : colors.foreground, flexShrink: 1 }]}>{name}</Text>
       <Text numberOfLines={1} ellipsizeMode="middle" style={{ color: colors.foregroundMuted, fontSize: 10, flex: 1, minWidth: 0 }}>{parts.join("/")}</Text>
     </Pressable>
@@ -58,7 +59,7 @@ export function FileIndex({ files, activePath, reviewed, colors, onJump }: { fil
     renderItem={({ item: file }) => <Pressable accessibilityRole="button" accessibilityLabel={t("jumpFile", { path: file.path })} accessibilityState={{ selected: activePath === file.path }}
       onPress={() => onJump(file.path)} onHoverIn={() => setHover(file.path)} onHoverOut={() => setHover(null)}
       style={({ pressed }) => ({ minHeight: 32, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 8, backgroundColor: pressed || hover === file.path || activePath === file.path ? colors.surface2 : colors.surface0 })}>
-      <Icon name={file.hash && reviewed[file.path] === file.hash ? "CircleCheck" : "FileCode"} size={13} color={file.hash && reviewed[file.path] === file.hash ? colors.statusSuccess : colors.foregroundMuted} />
+      {file.hash && reviewed[file.path] === file.hash ? <Icon name="CircleCheck" size={14} color={colors.statusSuccess} /> : <FileTypeIcon path={file.path} size={14} colors={colors} />}
       <Text numberOfLines={1} ellipsizeMode="middle" style={[fileNameTypography, { flex: 1, minWidth: 0, color: file.status === "A" || file.status === "?" ? colors.statusSuccess : colors.foreground }]}>{file.path.split("/").at(-1)}</Text>
       <Stats file={file} colors={colors} />
     </Pressable>}
